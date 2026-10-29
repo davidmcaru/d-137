@@ -1,0 +1,460 @@
+{
+  "nota": "Dibujos de reserva del mod D-137, en la rejilla de los Martys (un carácter por píxel; «.» es vacío). No los carga nada: «personajes», por si hay más sesiones que los ocho Martys de hooks/martys.ts; «objetos», ideas para una pestaña nueva; «elegidos», los que van en las fichas cuando se construya el diseño nuevo. Elegidos en la iteración 8 del rediseño (25-oct-2026).",
+  "elegidos": {
+    "cuota_y_dia": {
+      "clave": "pistola",
+      "nombre": "La pistola de portales",
+      "frase": "Cada viaje gasta su carga",
+      "filas": [
+        "....GGGGGG......",
+        "....GggggG......",
+        "...wwwwwwwwwwa..",
+        "..wwwwwwwwwwwwgg",
+        "..wwkwkwwwwwwwgg",
+        "..WWWWWWWWWWWa..",
+        "...WWW..........",
+        "...WWW..........",
+        "...WW..........."
+      ],
+      "pal": {
+        "w": "#e8e8e4",
+        "W": "#b8b8b2",
+        "g": "#5cd65c",
+        "G": "#2f9a3a",
+        "k": "#1b1b1f",
+        "a": "#9aa0a8"
+      }
+    },
+    "te_toca": {
+      "clave": "pajaro",
+      "nombre": "Paloma mensajera",
+      "frase": "el de la ficha de Te toca",
+      "filas": [
+        "....hhhh....",
+        "...hhhhhh...",
+        "..hhhhhhhh..",
+        "..hhwkhhhh..",
+        "..hhhhhyyyy.",
+        "..hhhhhyyy..",
+        "...hhhhhh...",
+        "....ffff....",
+        "..dddddddd..",
+        ".ddddddddddd",
+        "dd.dddddd.dd",
+        "d..dddddd..d",
+        "...dddddd...",
+        "...dd..dd...",
+        "...dd..dd...",
+        "..ddd..ddd.."
+      ],
+      "pal": {
+        "h": "#c9a26b",
+        "w": "#ffffff",
+        "k": "#1b1b1f",
+        "y": "#f2b632",
+        "f": "#8d6e4a",
+        "d": "#3b4a3f"
+      }
+    }
+  },
+  "personajes": [
+    {
+      "clave": "verano",
+      "nombre": "Verano",
+      "frase": "«¿Me necesitas o qué?»",
+      "filas": [
+        "...hhhhhhh......",
+        "..hhhhhhhhh.....",
+        "..hhssssssh.....",
+        "..hswwsswws.....",
+        "..hswesswes.....",
+        "..hhssssssh.....",
+        "..hhsskkssh.....",
+        "..hh.ssss.h.....",
+        "..hhpppppphh....",
+        "..spppppppps....",
+        "..spppppppps....",
+        "...pppppppp.....",
+        "...bbbbbbbb.....",
+        "...bbb..bbb.....",
+        "...bbb..bbb.....",
+        "...NNN..NNN....."
+      ],
+      "pal": {
+        "h": "#c4562e",
+        "s": "#f2c6a0",
+        "w": "#ffffff",
+        "e": "#1b1b1f",
+        "k": "#8a3a2a",
+        "p": "#e86f9e",
+        "b": "#3f5fa8",
+        "N": "#5b3a29"
+      }
+    },
+    {
+      "clave": "liz",
+      "nombre": "Liz",
+      "frase": "«Decide tú, cariño»",
+      "filas": [
+        "...hhhhhhh......",
+        "..hhhhhhhhh.....",
+        "..hhHsssssh.....",
+        "..hswwsswws.....",
+        "..hswesswes.....",
+        "..hhssssssh.....",
+        "..hhsskkssh.....",
+        "..hh.ssss.h.....",
+        "...rrrrrrrr.....",
+        "..srrrrrrrrs....",
+        "..srrrrrrrrs....",
+        "...rrrrrrrr.....",
+        "...dddddddd.....",
+        "...ddd..ddd.....",
+        "...ddd..ddd.....",
+        "...NNN..NNN....."
+      ],
+      "pal": {
+        "h": "#e8c460",
+        "H": "#c9a040",
+        "s": "#f2c6a0",
+        "w": "#ffffff",
+        "e": "#1b1b1f",
+        "k": "#8a3a2a",
+        "r": "#b0383c",
+        "d": "#3b3b46",
+        "N": "#2a2a2e"
+      }
+    },
+    {
+      "clave": "gerardo",
+      "nombre": "Gerardo",
+      "frase": "«¿Y yo qué hago?»",
+      "filas": [
+        "....hhhhhh......",
+        "...hhhhhhhh.....",
+        "...hhhsssss.....",
+        "...swwsswws.....",
+        "...swesswes.....",
+        "...ssssssss.....",
+        "...sskkkkss.....",
+        "....ssssss......",
+        "...gggggggg.....",
+        "..sggggggggs....",
+        "..sggggggggs....",
+        "...gggggggg.....",
+        "...tttttttt.....",
+        "...ttt..ttt.....",
+        "...ttt..ttt.....",
+        "...NNN..NNN....."
+      ],
+      "pal": {
+        "h": "#7a5230",
+        "s": "#f2c6a0",
+        "w": "#ffffff",
+        "e": "#1b1b1f",
+        "k": "#8a3a2a",
+        "g": "#9cc78f",
+        "t": "#b8a070",
+        "N": "#4a3020"
+      }
+    },
+    {
+      "clave": "copito",
+      "nombre": "Copito",
+      "frase": "«¿Y ahora, humano?»",
+      "filas": [
+        ".........GGGG...",
+        "........GGccGG..",
+        "........GGGGGGr.",
+        "........wwwwww..",
+        "........Wkwwwww.",
+        "........wwwwwwkk",
+        ".w......wwwww...",
+        ".ww....wwwww....",
+        "..wwwwwwwwwww...",
+        "..wwwwwwwwwww...",
+        "..WwwwwwwwwwW...",
+        "..ww.ww..ww.ww..",
+        "..WW.WW..WW.WW.."
+      ],
+      "pal": {
+        "G": "#6b7078",
+        "c": "#6cc4ff",
+        "r": "#ee5a5a",
+        "w": "#f4f4f2",
+        "W": "#c9c9c4",
+        "k": "#1b1b1f"
+      }
+    },
+    {
+      "clave": "terror",
+      "nombre": "Terror",
+      "frase": "«¡Puedes correr, pero no esconderte!»",
+      "filas": [
+        "......hhhh......",
+        ".....hhhhhh.....",
+        "...hhhHHHHhhh...",
+        ".....ssssss.....",
+        ".....skssks.....",
+        ".....sSssSs.....",
+        ".....skkkks.....",
+        "......ssss......",
+        "....rrrrrrrr....",
+        "...rggggggggr...",
+        "...grrrrrrrrg...",
+        "...rggggggggr...",
+        "..cc.dddddd.cc..",
+        "..c..dd..dd..c..",
+        ".....dd..dd.....",
+        ".....kk..kk....."
+      ],
+      "pal": {
+        "h": "#6b4a2b",
+        "H": "#3d2a18",
+        "s": "#d98a7a",
+        "S": "#b55a50",
+        "k": "#1b1b1f",
+        "r": "#b3302f",
+        "g": "#3f7a3a",
+        "c": "#c4c8ce",
+        "d": "#3b3b46"
+      }
+    },
+    {
+      "clave": "pompis",
+      "nombre": "Pompis",
+      "frase": "«¡Uuh-uii!»",
+      "filas": [
+        "......hhhh......",
+        "......hhhh......",
+        "......gggg......",
+        "....hhhhhhhh....",
+        ".....yyyyyy.....",
+        "...yyyyyyyyyy...",
+        "..yywwwyywwwyy..",
+        "..yywkwyywkwyy..",
+        "y.yywwwyywwwyy.y",
+        ".yyyyyyyyyyyyyy.",
+        "..yyyyrrrryyyy..",
+        "..YyyyyrryyyyY..",
+        "...YyyyyyyyyY...",
+        ".....YYYYYY.....",
+        ".....y....y.....",
+        "....yy....yy...."
+      ],
+      "pal": {
+        "h": "#2a2a2e",
+        "g": "#6b6b74",
+        "y": "#f4c542",
+        "Y": "#d8a62a",
+        "w": "#ffffff",
+        "k": "#1b1b1f",
+        "r": "#c0392b"
+      }
+    },
+    {
+      "clave": "butter",
+      "nombre": "El robot de la mantequilla",
+      "frase": "«¿Cuál es mi propósito?»",
+      "filas": [
+        "........r.......",
+        "........k.......",
+        "......GGGGG.....",
+        ".....GgggggG....",
+        ".....GgrrrgG....",
+        ".....GgggggG....",
+        "......GGGGG.....",
+        "........G.......",
+        "...yy.GGGGGGG...",
+        "..yyyGgggggggG..",
+        "...yy.GgggggG.G.",
+        "......GgggggG.G.",
+        "......GGGGGGG...",
+        ".......G...G....",
+        "......kkk.kkk..."
+      ],
+      "pal": {
+        "G": "#7d828b",
+        "g": "#c4c8ce",
+        "r": "#ee5a5a",
+        "y": "#f6d860",
+        "k": "#1b1b1f"
+      }
+    },
+    {
+      "clave": "michi",
+      "nombre": "Michi",
+      "frase": "«¡Squanch!»",
+      "filas": [
+        "..oo........oo..",
+        "..oio......oio..",
+        "..oiooooooooio..",
+        ".oooooooooooooo.",
+        ".ooowwoooowwooo.",
+        ".ooowkoooowkooo.",
+        ".oooooonnoooooo.",
+        ".ooooOOOOOOoooo.",
+        "..oooOkkkkOooo..",
+        "...oooooooooo...",
+        "..oooOOOOOOooo..",
+        ".oo.oOOOOOOo.oo.",
+        ".o..oOOOOOOo..o.",
+        "....oooooooo....",
+        "....ooo..ooo....",
+        "...oooo..oooo..."
+      ],
+      "pal": {
+        "o": "#e8892a",
+        "O": "#f7c27c",
+        "i": "#f2a0a0",
+        "w": "#ffffff",
+        "k": "#1b1b1f",
+        "n": "#7a3a20"
+      }
+    }
+  ],
+  "objetos": [
+    {
+      "clave": "bateria",
+      "nombre": "La batería cósmica",
+      "frase": "Toda la energía, en una caja",
+      "filas": [
+        "...rr......kk...",
+        "..GrrG....GkkG..",
+        ".GGGGGGGGGGGGGG.",
+        ".GddddddddddddG.",
+        ".GdbbbbbbbbbbdG.",
+        ".GdbcwccccccbdG.",
+        ".GdbccBggBccbdG.",
+        ".GdbcBgggBcwbdG.",
+        ".GdbccBggBccbdG.",
+        ".GdbbbbbbbbbbdG.",
+        ".GddrddddddkddG.",
+        ".GGGGGGGGGGGGGG."
+      ],
+      "pal": {
+        "G": "#55555e",
+        "d": "#2e2e35",
+        "r": "#e05050",
+        "k": "#111111",
+        "b": "#8a8f98",
+        "c": "#142238",
+        "g": "#5cc995",
+        "B": "#6cc4ff",
+        "w": "#ffffff"
+      }
+    },
+    {
+      "clave": "chirimbolo",
+      "nombre": "Un chirimbolo",
+      "frase": "Todo el mundo tiene uno",
+      "filas": [
+        ".......ll.......",
+        "......llll......",
+        ".......pp.......",
+        ".....pppppp.....",
+        "..pp.pplpppp.pp.",
+        "..pppppppppppp..",
+        "...pppPPPPppp...",
+        "....pppppppp....",
+        ".....PPPPPP.....",
+        "......bbbb......",
+        "......bbbb......",
+        ".....bbbbbb.....",
+        "....PPPPPPPP...."
+      ],
+      "pal": {
+        "p": "#f29ab0",
+        "P": "#c9708a",
+        "l": "#ffd0dc",
+        "b": "#a3586a"
+      }
+    },
+    {
+      "clave": "tele",
+      "nombre": "La tele cósmica",
+      "frase": "Las horas que le echas",
+      "filas": [
+        "....a......a....",
+        ".....a....a.....",
+        "......a..a......",
+        ".......aa.......",
+        "..KKKKKKKKKKKK..",
+        "..KssssssssKkK..",
+        "..KssgggGssKwK..",
+        "..KsgGssgGsKkK..",
+        "..KsgGssgGsKwK..",
+        "..KssgggGssKkK..",
+        "..KssssssssKkK..",
+        "..KKKKKKKKKKKK..",
+        "...kk......kk..."
+      ],
+      "pal": {
+        "K": "#4a4a52",
+        "k": "#2a2a30",
+        "s": "#1a3a2a",
+        "g": "#5cd65c",
+        "G": "#2f9a3a",
+        "w": "#b8bcc4",
+        "a": "#b8bcc4"
+      }
+    },
+    {
+      "clave": "cristal",
+      "nombre": "El cristal del destino",
+      "frase": "Te enseña cómo acabará la semana",
+      "filas": [
+        ".......lT.......",
+        "......lltT......",
+        "......lttT......",
+        ".....llttTT.....",
+        ".....lttttT.....",
+        "....lltttTTT....",
+        "....ltttttTT....",
+        "....ltwtttTT....",
+        "....lttttTTT....",
+        ".....lttTTT.....",
+        ".....lttTTT.....",
+        "......ltTT......",
+        "......ltTT......",
+        ".......tT......."
+      ],
+      "pal": {
+        "t": "#5ad8c8",
+        "T": "#2a9a8e",
+        "l": "#c8fff4",
+        "w": "#ffffff"
+      }
+    },
+    {
+      "clave": "arcade",
+      "nombre": "El arcade",
+      "frase": "Las horas de juego",
+      "filas": [
+        "...yyyyyyyyyy...",
+        "...yyyyyyyyyy...",
+        "...PPPPPPPPPP...",
+        "...PssssssssP...",
+        "...PsgsssgssP...",
+        "...PssgggsssP...",
+        "...PssssssssP...",
+        "..PPPPPPPPPPPP..",
+        "..PpkprpbppppP..",
+        "...pppppppppp...",
+        "...pppppppppp...",
+        "...pppppppppp...",
+        "...PPPPPPPPPP..."
+      ],
+      "pal": {
+        "p": "#6a3fb0",
+        "P": "#4a2a80",
+        "s": "#1a1a2a",
+        "g": "#5cc995",
+        "y": "#f6d860",
+        "r": "#ee5a5a",
+        "b": "#6cc4ff",
+        "k": "#1b1b1f"
+      }
+    }
+  ]
+}

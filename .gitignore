@@ -1,0 +1,18 @@
+# Lo que es solo para ti, que no se sube: los pasos para publicarlo
+PUBLICAR.md
+
+# Lo que escribe Claude Code al cargar el mod
+.claude-plugin/types/
+d-137/.claude-plugin/types/
+.mcpb-cache/
+
+# Lo que escriben las herramientas: la copia de los dibujos que deja el generador, y lo de Python
+Herramientas/generador/datos/
+__pycache__/
+
+# Lo de las herramientas y del sistema
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
+desktop.ini

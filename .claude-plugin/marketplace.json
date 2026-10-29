@@ -1,0 +1,13 @@
+{
+  "name": "d-137",
+  "owner": {
+    "name": "davidmcaru"
+  },
+  "description": "D-137: el panel de las sesiones de Claude, con Marty y Doc",
+  "plugins": [
+    {
+      "name": "d-137",
+      "source": "./d-137"
+    }
+  ]
+}

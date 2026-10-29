@@ -1,0 +1,27 @@
+{
+  "name": "d-137",
+  "version": "1.0.0",
+  "description": "D-137: el panel de las sesiones de Claude de este PC, en cinco pestañas (Sesión, Todas, Decisión, Activo y Cuota), con la franja de skills y commit encima del mensaje y el freno de choques",
+  "author": { "name": "David M. Carrasco Ruiz", "url": "https://davidmcaru.com" },
+  "homepage": "https://github.com/davidmcaru/d-137",
+  "repository": "https://github.com/davidmcaru/d-137",
+  "license": "MIT",
+  "keywords": ["claude-code", "mod", "panel", "sesiones", "pixel-art"],
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "dimension": {
+      "type": "string",
+      "title": "Qué sesiones van juntas",
+      "description": "En la pestaña Sesión, la tarjeta «Dimensión» junta las sesiones de tu mismo trabajo: en qué está cada una, lo que corre en ellas y lo que te han entregado. Mismo repo: las que trabajan en el mismo repositorio de git, también desde otro worktree o en otra rama (sin git, las de la misma carpeta). Mismo repo y rama: solo las de ese repositorio que están además en tu misma rama. Mismo principio del nombre: las que se llaman igual hasta el primer guion («Web-01 Portada» y «Web-02 Menú», o «API - Login» y «API - Pagos»), para quien pone así el nombre a sus sesiones; con esta, ese principio es el nombre corto de cada sesión en el panel, y con las otras dos, el nombre entero. Las que chocan con la tuya (te esperan, las esperas o tocáis el mismo archivo) salen siempre.",
+      "options": ["Mismo repo", "Mismo repo y rama", "Mismo principio del nombre"],
+      "default": "Mismo repo"
+    },
+    "frenos": {
+      "type": "string",
+      "title": "Frenos entre sesiones",
+      "description": "Para que dos sesiones abiertas a la vez no se pisen. El de archivos: si una sesión va a escribir en un archivo que otra está cambiando en ese momento, espera y avisa a la otra. El de git: antes de un git restore, checkout, switch, stash, clean o reset --hard que se llevaría cambios sin commit de otra sesión abierta, para una vez y dice qué archivos son y de quién; si se repite la orden, pasa. Sin ellos, el panel sigue avisando de las sesiones que tocan lo mismo.",
+      "options": ["Los dos", "Solo el de git", "Ninguno"],
+      "default": "Los dos"
+    }
+  }
+}
