@@ -68,14 +68,15 @@ En la app de escritorio de Claude: pulsa **+** junto a la caja del mensaje, lueg
 En Windows, sin GitHub: descarga el ZIP (**Code → Download ZIP**), descomprímelo donde quieras y haz doble clic en
 `Instalar D-137.cmd`. Si luego mueves la carpeta, vuelve a hacerlo desde el sitio nuevo.
 
-Al instalarlo, Claude Code te pregunta dos cosas, cada una con su desplegable:
+Al instalarlo con `/plugin install` o desde la app, Claude Code te pregunta dos cosas, cada una con su desplegable:
 
 - **Qué sesiones van juntas** en la pestaña Sesión: las del mismo repo, también desde otro worktree o en otra rama (lo
   que viene marcado); las del mismo repo y tu misma rama; o las que empiezan igual de nombre, si pones a tus sesiones
   nombres como «Web-01 Portada» y «Web-02 Menú».
 - **Qué frenos quieres**: los dos, solo el de git o ninguno.
 
-Luego se cambian en `/config`.
+Instalado desde la consola o con `Instalar D-137.cmd`, no pregunta: se queda con lo marcado. En los dos casos, se
+cambia luego en `/config` o con `/plugin configure d-137@d-137`.
 
 En la sesión donde lo instalas funciona al momento; en las que ya estaban abiertas, escribe `/reload-plugins`. El panel
 se abre solo y, si lo cierras, `/marty` o `/d-137` lo vuelven a abrir.

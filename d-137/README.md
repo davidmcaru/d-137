@@ -82,9 +82,10 @@ termina o te necesita, sale un aviso.
 
 ## Al instalarlo
 
-Claude Code pregunta dos cosas al instalar el mod, en una pantalla con un desplegable para cada una (los campos de
-`userConfig` de `.claude-plugin/plugin.json`); luego se cambian en `/config`, y el cambio recarga el mod
-(`hooks/ajustes.ts`):
+Claude Code pregunta dos cosas al instalar el mod con `/plugin install` o desde la app, en una pantalla con un
+desplegable para cada una (los campos de `userConfig` de `.claude-plugin/plugin.json`); instalado desde la consola
+(`claude plugin install`, también el `.cmd`), no pregunta y se queda con lo marcado. Luego se cambian en `/config` o
+con `/plugin configure d-137@d-137`, y el cambio recarga el mod (`hooks/ajustes.ts`):
 
 - **Qué sesiones van juntas** (la Dimensión de Sesión): «Mismo repo», también desde otro worktree o en otra rama (sin
   git, la misma carpeta), la que viene marcada; «Mismo repo y rama»; o «Mismo principio del nombre», para quien pone a
