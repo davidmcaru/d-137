@@ -531,33 +531,24 @@ async function atajo($: any, ruta: string, abrir: (r: string) => Promise<void>) 
 }
 // «Mods» (28-oct): deja «/reload-plugins» escrito en la caja de cada sesión abierta, para que lo mandes tú: la
 // app no deja que un mod lo lance («isn't available over a remote connection»). Aquí, ya; en las demás, con la marca de
-// recarga, que su mod entiende si ya es de esta versión (su ficha lo dice); las de antes, a mano. La que está
-// trabajando, al acabar su turno
+// recarga, que su mod entiende si ya es de esta versión (su ficha lo dice). Al momento y sin avisos, también si la
+// sesión trabaja (30-oct): una orden mandada a mitad de turno espera a que acabe
 const RECARGAR = '/reload-plugins'
 let recargaPendiente = false
 async function recargaTodas($: any, surface?: string) {
   const vivas = await read($, otras)
-  const nuevas = vivas.filter(f => f.recarga)
-  for (const f of nuevas) {
+  for (const f of vivas.filter(f => f.recarga)) {
     try {
       await $.session.send({ to: { sessionId: f.id }, text: RECARGA })
     } catch {
       // esa, a mano
     }
   }
-  const viejas = vivas.length - nuevas.length
-  avisa($, `Pulsa Enter en la caja para recargar el mod${nuevas.length ? `; en ${nuevas.length === 1 ? 'la otra sesión' : `las otras ${nuevas.length}`}, ` +
-    'te lo dejo escrito cuando acaben lo que estén haciendo' : ''}` +
-    `${viejas ? `; ${viejas === 1 ? 'una sesión es de antes y hay que recargarla' : `${viejas} sesiones son de antes y hay que recargarlas`} a mano` : ''}.`)
-  await pideRecarga($, surface)
+  await pideRecarga($, surface, true)
 }
-// La recarga, en la caja de esta sesión: si trabaja, al acabar su turno; si tienes algo escrito, no lo pisa (te lo copia
-// para que lo pegues tú)
-async function pideRecarga($: any, surface?: string) {
-  if ((await read($, estado)) === 'trabajando') {
-    recargaPendiente = true
-    return
-  }
+// La recarga, en la caja de la sesión. Si tienes algo escrito, no lo pisa: aquí te la copia y te lo dice; en las demás,
+// vuelve a probar al acabar su turno, sin tocarte el portapapeles
+async function pideRecarga($: any, surface?: string, aqui = false) {
   recargaPendiente = false
   let caja = { text: '', cursor: 0 }
   try {
@@ -565,19 +556,20 @@ async function pideRecarga($: any, surface?: string) {
   } catch {
     // sin caja: se copia
   }
-  if (!caja.text.trim()) {
+  if (!caja.text.trim() || caja.text.trim() === RECARGAR) {
     try {
       const r = await $.prompt.fill({ text: RECARGAR, mode: 'replace' })
-      if (r?.isFilled !== false) {
-        await update($, aviso, () => `Escrito ${RECARGAR}: pulsa Enter para recargar el mod`)
-        return
-      }
+      if (r?.isFilled !== false) return
     } catch {
       // sin caja: se copia
     }
   }
+  if (!aqui) {
+    recargaPendiente = true
+    return
+  }
   await copia($, RECARGAR, surface)
-  avisa($, `Para recargar el mod, manda ${RECARGAR} (copiado) cuando tengas la caja libre.`)
+  avisa($, `Tienes algo escrito en la caja: ${RECARGAR}, copiado para cuando acabes.`)
 }
 // Lo que dice un mensaje de otra sesión, sin el marco con el que llega («Another Claude session sent a message:
 // <cross-session-message …>…</cross-session-message>»): sin quitarlo, la marca de recarga no se reconocía (28-oct)
@@ -787,7 +779,8 @@ async function sigueSalida($: any, t: Tarea) {
 // abre en VS Code o, sin él, en el Bloc de notas. Por PowerShell y codificado: explorer.exe /select quiere las comillas
 // alrededor de la ruta, no del argumento entero, y una ruta con espacios las rompería
 const DOCUMENTO = /\.(html?|pdf|md|txt|csv|docx?|xlsx?|pptx?|jpe?g|png|gif|webp|avif|svg|bmp|tiff?|heic|mp4|mov|mkv|webm|avi|mp3|wav|flac|m4a|ogg|aiff?)$/i
-// Lo que Claude te dio en el chat (comoRun) se abre como con su «Run»: explorer.exe con la ruta (un .cmd, se ejecuta)
+// Lo que Claude te dio en el chat (comoRun) se abre como con su «Run»: explorer.exe con la ruta (un .cmd, se ejecuta);
+// lo de la cabeza de Doc de la franja, igual
 async function abreArchivo($: any, ruta: string, carpeta: boolean, comoRun = false) {
   const r = `'${ruta.replace(/\//g, '\\').replace(/'/g, "''")}'`
   const abrir = carpeta
@@ -1226,7 +1219,7 @@ export const register: Register = (on, opciones) => {
     void alDiaRepo($)
     void alDiaSesion($, true)
     const hecha = await next(e)
-    // la recarga que se pidió con «Mods» mientras trabajaba, ya en la caja
+    // la recarga que pidió «Mods» de otra sesión cuando tenías algo escrito: otra vez, ahora
     if (recargaPendiente) {
       $.clock.after(300, () => {
         void pideRecarga($)
@@ -1253,7 +1246,7 @@ export const register: Register = (on, opciones) => {
   on('session.receive', async ($, e, next) => {
     const o = e.origin as { kind: string; plugin?: string }
     const cuerpo = cuerpoDe(e.text)
-    // «Mods» de otra sesión: deja la recarga escrita en la caja, cuando la sesión quede libre, sin pasarle nada a Claude
+    // «Mods» de otra sesión: deja la recarga escrita en la caja, ya, sin pasarle nada a Claude
     if (e.agentId === undefined && o.kind === 'peer' && o.plugin === 'd-137' && cuerpo.startsWith(RECARGA)) {
       $.clock.after(300, () => {
         void pideRecarga($)
@@ -1441,7 +1434,7 @@ export const register: Register = (on, opciones) => {
     const cierra = () => void update($, franjaMenu, () => null)
     return franja($.ui.resolve(e), await read($, franjaMenu), {
       panelGeneral: () => {
-        void atajo($, PANEL, r => abreArchivo($, r, false))
+        void atajo($, PANEL, r => abreArchivo($, r, false, true))
         cierra()
       },
       escribe: texto => {

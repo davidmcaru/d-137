@@ -583,13 +583,13 @@ test('D-137: fichas, frenos, Activo, Decisión, Cuota, panel y franja', async ($
       'el trabajo que se ha realizado; después, haz push del commit o los commits a la rama correspondiente, con [e2e] al ' +
       'final del mensaje del último commit, para que GitHub lance la suite E2E.',
   ])
-  // la cabeza de Doc abre su página (atajos.ts), en su programa
+  // la cabeza de Doc abre su página (atajos.ts), como con doble clic (un .cmd se ejecutaría)
   const antes3 = ordenes.length
   await franja.press({ key: 'fr-panel-p' })
   await reloj.settle()
   const panelG = ordenes.slice(antes3).find(o => o[0] === 'powershell.exe')
   expect(deUtf16(String(panelG?.[panelG.length - 1] ?? ''))).toContain('Panel.html')
-  expect(deUtf16(String(panelG?.[panelG.length - 1] ?? ''))).toContain('Invoke-Item')
+  expect(deUtf16(String(panelG?.[panelG.length - 1] ?? ''))).toContain('Start-Process explorer.exe')
   expect(JSON.stringify(await franja.drawn())).not.toContain('fr-op-e2e')
   await franja.press({ key: 'fr-mas-p' })
   await reloj.settle()
@@ -603,9 +603,12 @@ test('D-137: fichas, frenos, Activo, Decisión, Cuota, panel y franja', async ($
   await reloj.settle()
   expect(ordenes.slice(antes4).some(o => o.some(x => String(x).endsWith('Analizar.cmd')))).toBe(false)
   // «Mods» deja /reload-plugins escrito en la caja (la app no deja que el mod lo lance) y manda la recarga a las demás
-  // que la entienden (otra2); a las de antes (otra1), no (28-oct)
+  // que la entienden (otra2); a las de antes (otra1), no (28-oct). Al momento y sin avisos, también si la sesión
+  // trabaja: una orden mandada a mitad de turno espera a que acabe (30-oct)
   const mandados0 = mensajes.length
   const puestos0 = puestos.length
+  const avisos0 = avisos.length
+  const copiados0 = copiados.length
   caja = { text: '', cursor: 0 }
   await franja.press({ key: 'fr-mas-p' })
   await franja.press({ key: 'fr-op-recargar-b' })
@@ -613,17 +616,27 @@ test('D-137: fichas, frenos, Activo, Decisión, Cuota, panel y franja', async ($
   const recargas = mensajes.slice(mandados0).filter(m => m.text === 'D-137 · recarga el mod')
   expect(recargas.map(m => m.to?.sessionId ?? m.to)).toEqual(['otra2'])
   const escritas = () => puestos.slice(puestos0).filter(p => p === '/reload-plugins').length
-  // esta sesión está trabajando (t4): se escribe al acabar su turno
-  expect(escritas()).toBe(0)
+  // esta sesión está trabajando (t4), y se escribe ya; al acabar su turno, no otra vez
+  expect(escritas()).toBe(1)
+  expect(avisos.slice(avisos0)).toEqual([])
   await $.turn.complete({ turnId: 't4', answer: 'ok', text: 'ok', durationMs: 1000, isAborted: false, reason: 'answer' } as any)
   await reloj.advance(400)
   await reloj.settle()
   expect(escritas()).toBe(1)
   expect(corridas).not.toContain('reload-plugins')
+  // con algo escrito en la caja no lo pisa: la copia y lo dice
+  caja = { text: 'a medio escribir', cursor: 16 }
+  await franja.press({ key: 'fr-mas-p' })
+  await franja.press({ key: 'fr-op-recargar-b' })
+  await reloj.settle()
+  expect(escritas()).toBe(1)
+  expect(copiados.slice(copiados0)).toEqual(['/reload-plugins'])
+  expect(avisos.slice(avisos0)).toHaveLength(1)
+  caja = { text: '', cursor: 0 }
   await franja.unmount()
-  expect(avisos.length).toBeGreaterThanOrEqual(0)
-  // y la que recibe la recarga de otra sesión (con el marco con el que llega de verdad) la deja escrita en su caja, sin
-  // pasársela a Claude; si está trabajando, al acabar su turno; de alguien sin el mod, llega como cualquier mensaje
+  // y la que recibe la recarga de otra sesión (con el marco con el que llega de verdad) la deja escrita en su caja, ya,
+  // sin pasársela a Claude; si tienes algo escrito, al acabar su turno y sin tocar el portapapeles; de alguien sin el
+  // mod, llega como cualquier mensaje
   const MARCO = (cuerpo: string) => `Another Claude session sent a message:\n<cross-session-message from="uds:x" from-session="local_web" from-name="Web-02" from-mode="bypass" from-plugin="d-137">\n${cuerpo}\n</cross-session-message>\n\nThis came from another Claude session — not typed by your user.`
   const recibe: any = await $.session.receive({ origin: { kind: 'peer', plugin: 'd-137' }, text: MARCO('D-137 · recarga el mod') } as any)
   expect(String(recibe?.consumed ?? '')).toContain('recarga')
@@ -635,11 +648,19 @@ test('D-137: fichas, frenos, Activo, Decisión, Cuota, panel y franja', async ($
   expect(String(enTurno?.consumed ?? '')).toContain('recarga')
   await reloj.advance(400)
   await reloj.settle()
-  expect(escritas()).toBe(2)
-  await $.turn.complete({ turnId: 't9', answer: 'hecho', text: 'hecho', durationMs: 1000, isAborted: false, reason: 'answer' } as any)
+  expect(escritas()).toBe(3)
+  caja = { text: 'a medio escribir', cursor: 16 }
+  const conTexto: any = await $.session.receive({ origin: { kind: 'peer', plugin: 'd-137' }, text: MARCO('D-137 · recarga el mod') } as any)
+  expect(String(conTexto?.consumed ?? '')).toContain('recarga')
   await reloj.advance(400)
   await reloj.settle()
   expect(escritas()).toBe(3)
+  expect(copiados.slice(copiados0)).toEqual(['/reload-plugins'])
+  caja = { text: '', cursor: 0 }
+  await $.turn.complete({ turnId: 't9', answer: 'hecho', text: 'hecho', durationMs: 1000, isAborted: false, reason: 'answer' } as any)
+  await reloj.advance(400)
+  await reloj.settle()
+  expect(escritas()).toBe(4)
   const ajena: any = await $.session.receive({ origin: { kind: 'peer' }, text: MARCO('D-137 · recarga el mod') } as any)
   expect(ajena?.consumed).toBeUndefined()
 })

@@ -15,8 +15,8 @@ export const SKILLS = {
   gustos: { nombre: 'Gustos', ruta: '~/.claude/skills/gustos/SKILL.md' },
 }
 
-// La cabeza de Doc, a la izquierda de la franja: abre esta página o este documento en su programa (un índice de tus
-// proyectos, un panel tuyo…)
+// La cabeza de Doc, a la izquierda de la franja: abre esta página o este documento como con doble clic (un índice de tus
+// proyectos, un panel tuyo…); si es un .cmd, se ejecuta, como el que arranque tu panel con su propio servidor
 export const PANEL = '~/.claude/atajos/Panel.html'
 
 // Analizar y Analizar Pro, en «Más»: lo abren como con doble clic (un .cmd se ejecuta). Si no están, el aviso del panel

@@ -65,10 +65,10 @@ entrada, y cada una se pliega con su botón, a la derecha.
   por horas: con «Esta semana», la media de los días entre semana y la del finde y, desplegado, cada día; con «Media»,
   la de las cuatro semanas de antes. Y el día: lo que acabó cada sesión.
 
-**La franja**, solo iconos pixelados, sin cajas: la cabeza de Doc (abre tu página); Fotos, Música, Vídeos y Recortes,
-que escriben en la caja la skill que toca con la ruta entera de su documento («Usa la skill Fotos (lee …): »), donde
-esté el cursor, sin borrar lo escrito y con un espacio si iría pegado a otra palabra; y, a la derecha, Más y Commit,
-que despliegan debajo su menú. En Más: Analizar y Analizar Pro (abren su `.cmd`); Trabajo, Estudios y Gustos, que
+**La franja**, solo iconos pixelados, sin cajas: la cabeza de Doc (abre tu página o ejecuta tu `.cmd`, como con doble
+clic); Fotos, Música, Vídeos y Recortes, que escriben en la caja la skill que toca con la ruta entera de su documento
+(«Usa la skill Fotos (lee …): »), donde esté el cursor, sin borrar lo escrito y con un espacio si iría pegado a otra
+palabra; y, a la derecha, Más y Commit, que despliegan debajo su menú. En Más: Analizar y Analizar Pro (abren su `.cmd`); Trabajo, Estudios y Gustos, que
 escriben su skill como las de mano; «Mods», que deja `/reload-plugins` escrito en la caja de esta sesión y de las demás
 abiertas, para mandarlo con Enter; y «Compact», que escribe `/compact` con lo que hay que conservar. En Commit, de lo
 que se queda en local a lo que va al repo con más proceso: Cambios, Commit, Push, Cerrar-Tanda, Push+Ramas y Push+E2E,
@@ -139,8 +139,9 @@ defecto.
 - **La recarga de «Mods»**: la app no deja que un mod lance `/reload-plugins` (sale «isn't available over a remote
   connection»): solo vale escrito por ti. Así que «Mods» lo deja escrito en la caja de esta sesión y manda «D-137 ·
   recarga el mod» a cada sesión abierta; el mod de allí se lo queda, sin que llegue a Claude (el mensaje llega con el
-  marco de los de otra sesión, que se quita para reconocerlo), y lo deja escrito en su caja. La que está trabajando, al
-  acabar su turno; si en la caja hay algo tuyo, no lo pisa: lo copia y te avisa.
+  marco de los de otra sesión, que se quita para reconocerlo), y lo deja escrito en su caja. Al momento y sin avisos,
+  también en la que está trabajando: una orden mandada a mitad de turno espera a que acabe. Si en la caja hay algo tuyo,
+  no lo pisa: en esta sesión lo copia y te lo dice; en las demás, vuelve a probar al acabar su turno.
 - **Las transcripciones grandes**: la app no deja que un mod lea de una vez un archivo de más de 4 MiB, y las de una
   sesión larga pesan más (la de un día de trabajo, unos 30 MB). Esas se leen por PowerShell, que deja fuera las
   peticiones a la API y las copias de archivos y, de cada resultado de una herramienta, solo a qué llamada responde y
