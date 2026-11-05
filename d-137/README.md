@@ -38,7 +38,9 @@ entrada, y cada una se pliega con su botón, a la derecha.
   el código, que va a VS Code (un `.py` o un `.js` abiertos con su programa se ejecutarían). Plegado, lo de la última
   hora, como mucho tres; desplegado, hasta 50.
 - **Todas** (todas las sesiones): su ficha (trabajan, esperan y bloqueadas) y, desplegada, el bloque de 3 × 3 de Marty con lo de
-  todas las sesiones: sumado lo que se suma, y el rato más largo y el que más gastó, el de la que más. Las sesiones, en
+  todas las sesiones de este mes, del día 1 a hoy, también las cerradas y las borradas (del histórico; el de todos los
+  meses, con `/historico`): sumado lo que se suma, y el rato más largo y el que más gastó, el de la que más, y con «≈» el
+  coste si parte de él es estimado. Las sesiones, en
   casillas, cuatro por fila, con un selector de estado y el tiempo que lleva cada una en su estado («26 min»); al pulsar
   su nombre o su tiempo, su panel (el rótulo pixelado, sus pasos, su gasto, su carpeta con la rama y los cambios sin
   commit, y «Contestar», «Avisar a…» o «Sesión»). El bloqueo, si lo hay, y lo que necesita de ti, por grupos. Una sesión
@@ -55,8 +57,8 @@ entrada, y cada una se pliega con su botón, a la derecha.
   todas las sesiones: lo que han tardado, lo que han costado (su parte del coste de su sesión, por lo que pesan) y sus
   tokens, en total, el que más y de media por agente, y los que acabaron mal, en rojo. Debajo, los servidores, comandos y
   agentes de todas las sesiones, activos o acabados, con su última línea y su avance, un bloque por sesión: `>_` abre una
-  terminal que sigue su salida, ■ lo para (con una segunda pulsación), ⧉ copia la dirección de un servidor y «Limpiar»
-  quita los acabados.
+  terminal que sigue su salida, ■ lo para (con una segunda pulsación; también lo de otra sesión, a la que se lo pide, si
+  lleva esta versión del mod), ⧉ copia la dirección de un servidor y «Limpiar» quita los acabados.
 - **Cuota** (la cuota y el día): la semana, hoy y las 5 horas, y si te sobra o te falta para el ritmo de la semana;
   desplegada, la semana día a día, de lunes a domingo, con «se renueva» donde cambia la cuota. Lo gastado por cada
   sesión desde que se renovó la semana (desplegado, dos barras: la de la semana y, debajo, la de hoy), con el botón de la
@@ -74,7 +76,7 @@ abiertas, para mandarlo con Enter; y «Compact», que escribe `/compact` con lo 
 que se queda en local a lo que va al repo con más proceso: Cambios, Commit, Push, Cerrar-Tanda, Push+Ramas y Push+E2E,
 que escriben en la caja su orden entera, sin mandarla. Todas las rutas, en `hooks/atajos.ts`.
 
-**La pestaña** es la misma en todas las sesiones: la que eliges en una se apunta en `coordinador/vista.json` y las demás
+**La pestaña** es la misma en todas las sesiones: la que eliges en una se apunta en `d-137/vista.json` y las demás
 se ponen en ella en un segundo.
 
 Al terminar con decisiones, el mensaje propone «todo lo recomendado» en gris, para cogerlo con Tab. Cuando otra sesión
@@ -100,19 +102,29 @@ defecto.
 
 - `/marty` abre el panel en Sesión, y `/d-137`, en Todas.
 - `/rotulo <texto>` cambia el rótulo de la sesión en los paneles; sin texto, vuelve a su nombre.
+- `/historico` escribe el informe del histórico y lo abre: una página (`d-137/informe-historico.html`) con las
+  cifras de todas las sesiones que ha habido, el panel del total, con una fila por mes, una barra por mes y, en cada mes,
+  lo de cada sesión; en el chat, una línea por mes. Sale cuando se pide, nunca solo. Si aún falta alguna por leer, se abre en cuanto acaba. Su botón «Descargar PDF»
+  baja el informe entero, en A4 vertical, en blanco, con todos los meses desplegados y sin partir ninguno en dos páginas si
+  cabe en una: lo saca Chrome, o Edge, sin ventana, al hacer el informe, y va dentro de la página; sin ninguno de los
+  dos, el botón abre la ventana de imprimir del navegador, que también guarda en PDF.
 
 ## Cómo funciona
 
-- **Las fichas** (`hooks/fichas.ts`): cada sesión deja la suya en `~/.claude/coordinador/<id>.json`, con su personaje,
+- **La carpeta compartida**, `~/.claude/d-137`, desde el 3-nov (antes, `~/.claude/coordinador`): la primera vez
+  que arranca, cada sesión copia ahí lo de la de antes que aún no esté, antes de leer nada, y deja la marca `.migrado`; la
+  de antes no se toca.
+- **Las fichas** (`hooks/fichas.ts`): cada sesión deja la suya en `~/.claude/d-137/<id>.json`, con su personaje,
   su nombre, su rótulo, su estado, su paso, sus decisiones, lo que tiene en marcha, su gasto, los archivos que toca, su
   carpeta (rama, cambios sin commit y la raíz de su worktree principal, la misma en todos los worktrees del repo) y el
   enlace para abrirla en la app, y la renueva cada 3 s; la que lleva 20 s sin
   renovarla sale de los paneles. Si dos sesiones arrancan a la vez con el mismo personaje, se lo queda la que llegó
   antes.
-- **El registro del día** (`coordinador/registro/<id>.json`): lo que costó y lo que acabó cada sesión cada día, aunque
+- **El registro del día** (`d-137/registro/<id>.json`): lo que costó y lo que acabó cada sesión cada día, aunque
   ya esté cerrada, también hora a hora (para cortar la semana a la hora en que se renueva) y con sus tokens. Los dólares
   se apuntan a medida que sube el coste de la sesión (cada 30 s y al acabar cada turno): así lo de los subagentes, que el
-  coste de la sesión ya suma, cuenta una sola vez. Los tokens salen de su transcripción
+  coste de la sesión ya suma, cuenta una sola vez. Al reabrir una sesión su coste sale a cero y enseguida vuelve a lo que
+  llevaba, y eso no se apunta. Los tokens salen de su transcripción
   (`~/.claude/projects/<carpeta>/<id>.jsonl` y las de sus subagentes, en `<id>/subagents`), cada respuesta una vez y con
   su hora (`hooks/tokens.ts`): se lee entera solo si ha cambiado, como mucho cada dos minutos o al acabar un turno.
 - **Lo de toda la sesión** (el bloque de 3 × 3 de Marty, `hooks/sesion.ts`), de las mismas transcripciones: un rato de
@@ -123,9 +135,18 @@ defecto.
   sesión que la app vuelve a abrir con otro id sigue contando lo de la de antes: su resumen dice dónde está aquella
   transcripción. Los archivos, sin git: los que escribe o te manda, y los que crean, cambian, mueven o borran sus
   órdenes en las carpetas que nombran (lo cambiado mientras corrían), cada uno una vez; lo de `~/.claude` no cuenta.
+- **El histórico** (`d-137/historico/<id>.json`, `hooks/historico.ts`): lo de cada sesión, día a día y sin caducar,
+  aunque se borre: lo que cuesta, lo que pesa, sus tokens, lo trabajado, sus ratos más largos y sus archivos, además de
+  cuándo empezó y cuándo se la vio por última vez. Cada sesión guarda lo suyo cada dos minutos y al acabar cada turno, y
+  lo que falta lo lee, poco a poco y mientras no trabaja, la que lleva la cuota: las sesiones de antes de instalar el mod
+  (sus transcripciones, de las que saca su nombre), las que se cerraron con algo sin guardar y las ya borradas, de las
+  que solo queda su registro. Una sesión que sigue de otra ya trae lo de aquella (también su coste, que Claude Code
+  arrastra), así que aquella no cuenta aparte. El coste de cada día es su parte del de la sesión, por lo que pesa, y no
+  lo apuntado por días, que solo recuerda nueve. Las que no llegaron a tener el mod no tienen coste: se estima de lo que
+  pesa lo suyo, a lo que vale en las demás, y lleva «≈». La ficha de Todas y el informe suman de aquí.
 - **Los subagentes**: sus turnos también pasan por `turn.start` y `turn.complete` (con su `agentId`), y no tocan el
   estado, los pasos ni el plan de la sesión.
-- **La cuota de todas** (`coordinador/cuota.json`): la lleva una sola sesión, la que llegó antes: apunta el % de la
+- **La cuota de todas** (`d-137/cuota.json`): la lleva una sola sesión, la que llegó antes: apunta el % de la
   semana al empezar y al acabar cada día y lo gastado en cada hora, con la lectura más nueva de todas.
 - **El gasto de cada sesión**: Claude Code solo da el % de la cuenta entera; lo de cada una sale de lo que cuesta (los
   dólares que suma su motor) por lo que vale cada dólar en % esos días (`hooks/calculos.ts`). Restar el % de antes y el

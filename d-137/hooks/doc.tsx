@@ -5,10 +5,10 @@
 import type { RenderElement } from 'claude-code'
 
 import type { Ficha } from '../types'
-import type { Acciones, Datos, El, Est, Totales } from './comun'
+import type { Acciones, Datos, El, Est } from './comun'
 import {
   abiertoDe, arriba, bloqueTotales, cabecera, corto, desdeDe, pulsable, dibujo, ESTADOS, estadoDe, ficha, figuraEn, hora, ico,
-  marcaEn, mini, pct,
+  delMes, marcaEn, mini, pct,
   plegar, plural, rejilla, SUAVE, tamFigura, tarjeta, tiempoCorto, tiempoEstado, toque,
 } from './comun'
 import { fichaDe, marca, marcaFicha, pixelado, docDe } from './dibujos'
@@ -52,20 +52,11 @@ export function pestanaDoc(el: El, d: Datos, a: Acciones): RenderElement[] {
   // si no, el de siempre y el de la pistola, alternando cada medio minuto
   const cara: CaraDoc = n.bloqueada ? 'bloqueo' : n.espera ? 'espera' : todas.length && !n.trabaja ? 'paradas'
     : Math.floor(d.ahora / 30000) % 2 ? 'normal2' : 'normal'
-  // Desplegada (28-oct), el bloque de 3 × 3 de Marty, de todas las sesiones: sumado lo que se suma; el rato más
-  // largo y el que más gastó, el de la que más; y los archivos, los que han tocado entre todas. Las que llevan el mod de
-  // antes no tienen su resumen y solo cuentan sus dólares
+  // Desplegada (28-oct), el bloque de 3 × 3 de Marty y, desde el 3-nov, de todas las sesiones de este mes, del día 1 a
+  // hoy, también las cerradas y las borradas (historico.ts; lo de todos los meses, con /historico): sumado lo que se
+  // suma; el rato más largo y el que más gastó, el de la que más; y los archivos, los que han tocado entre todas
   const abiertoF = abiertoDe(d, 'fichaDoc')
-  const con = todas.map(f => ({ f, r: d.registros.find(x => x.id === f.id) }))
-  const res = con.flatMap(x => (x.r?.sesion ? [{ f: x.f, s: x.r.sesion }] : []))
-  const suma = (v: number[]) => v.reduce((s, x) => s + x, 0)
-  const usd = suma(todas.map(f => f.usd ?? 0))
-  const totales: Totales = res.length ? {
-    abierta: suma(res.map(x => (x.s.inicio ? d.ahora - x.s.inicio : 0))), activa: suma(res.map(x => x.s.activa)),
-    maxT: Math.max(...res.map(x => x.s.maxT)), tok: suma(con.map(x => x.r?.sesion?.tok ?? x.r?.tok ?? 0)),
-    maxTok: Math.max(...res.map(x => x.s.maxTok)), usd,
-    maxUsd: Math.max(...res.map(x => (x.s.peso > 0 ? ((x.f.usd ?? 0) * x.s.maxPeso) / x.s.peso : 0))),
-  } : { usd }
+  const his = d.historico
   const cabeza = ficha(el, {
     key: 'ficha',
     dibujo: figuraEn(el, docDe(cara), 'Doc'),
@@ -73,8 +64,12 @@ export function pestanaDoc(el: El, d: Datos, a: Acciones): RenderElement[] {
     derecha: plegar(el, 'fichaDoc', abiertoF, a),
     nombre: plural(todas.length, 'sesión', 'sesiones'),
     cols: d.cols,
-    abajo: abiertoF ? bloqueTotales(el, 'todas', totales,
-      { etiqueta: 'Archivos', valor: res.length ? String(suma(res.map(x => x.s.archivos))) : '—', color: T.naranja }) : undefined,
+    abajo: abiertoF ? (
+      <Box key="historico" flexDirection="column" gap="xs">
+        {his ? <Text size="caption" color={T.t3} wrap="truncate-end">{`${delMes(d.ahora)} · ${plural(his.n, 'sesión', 'sesiones')}`}</Text> : null}
+        {bloqueTotales(el, 'todas', his ?? {}, { etiqueta: 'Archivos', valor: his ? String(Math.round(his.archivos)) : '—', color: T.naranja })}
+      </Box>
+    ) : undefined,
     filas: [
       { etiqueta: 'Trabajan', frac: n.trabaja / total, valor: String(n.trabaja), color: ESTADOS.trabaja.hex },
       { etiqueta: 'Esperan', frac: n.espera / total, valor: String(n.espera), color: ESTADOS.espera.hex },

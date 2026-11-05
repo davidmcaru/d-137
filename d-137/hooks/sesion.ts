@@ -4,7 +4,7 @@
 // pregunta y espera tu respuesta. Una sesión que sigue de otra (la app la vuelve a abrir con otro id, desde el resumen
 // de la anterior) trae también lo de aquella: ese resumen dice dónde está su transcripción
 import type { ResumenSesion } from '../types'
-import { norm } from './fichas'
+import { diaDe, norm } from './fichas'
 import { usoDe } from './tokens'
 
 export type Tramo = { desde: number; hasta: number; tok: number; peso: number }
@@ -12,9 +12,12 @@ export type Orden = { id: string; desde: number; hasta: number; texto: string; c
 // Lo de cada subagente, de su transcripción (28-oct: el bloque de Trabajador, lo de Marty pero de los agentes):
 // cuándo empezó y acabó, y sus tokens y lo que pesan en dólares
 export type Agente = { desde: number; hasta: number; tok: number; peso: number }
+// `editados`, cada archivo con la primera vez que se tocó; `dias`, los tokens y lo que pesa cada día; `fin`, su última
+// línea, y `titulo`, el nombre que le pusiste o, si no, el que le puso la app (para el histórico, historico.ts)
 export type Analisis = {
-  inicio: number | null; tok: number; peso: number; tramos: Tramo[]; editados: string[]; ordenes: Orden[]; agentes: Agente[];
-  fallidos: number; preguntas: Preguntas
+  inicio: number | null; tok: number; peso: number; tramos: Tramo[]; editados: Record<string, number>; ordenes: Orden[];
+  agentes: Agente[]; fallidos: number; preguntas: Preguntas; dias: Record<string, { tok: number; peso: number }>;
+  fin: number | null; titulo: string
 }
 // Las preguntas que te ha hecho (28-oct: el bloque de Decisión): cuándo llegó cada una y, de las que contestaste,
 // cuántas con la recomendada, cuántas con lo tuyo («Otra») y cuántas desde el panel
@@ -66,6 +69,7 @@ const ORDENES = ['Bash', 'PowerShell']
 type Linea = {
   type?: string; subtype?: string; uuid?: string; timestamp?: string; isSidechain?: boolean; isMeta?: boolean
   isCompactSummary?: boolean; turnPosition?: unknown; turnOrigin?: string; cwd?: string; requestId?: string
+  customTitle?: string; aiTitle?: string
   message?: { id?: string; model?: string; usage?: Record<string, unknown>; content?: unknown }
 }
 type Bloque = {
@@ -106,7 +110,10 @@ export function analiza(textos: { texto: string; principal: boolean }[]): Analis
   const usos = new Map<string, { t: number; n: number; peso: number; ag: number }>()
   const eventos: { t: number; k: 'inicio' | 'algo' | 'fin' | 'espera' | 'vuelve' | 'sub' }[] = []
   const pendientes = new Set<string>()
-  const editados = new Set<string>()
+  const editados: Record<string, number> = {}
+  const edita = (r: string, t: number) => {
+    editados[r] = Math.min(editados[r] ?? t, t)
+  }
   const ordenes = new Map<string, Orden>()
   const agentes: Agente[] = []
   // las llamadas a un agente y las que acabaron mal (con error o, en segundo plano, con su aviso de «failed»)
@@ -116,6 +123,9 @@ export function analiza(textos: { texto: string; principal: boolean }[]): Analis
   const lotes: { t: number; decs: Pregunta[] }[] = []
   const respuestas: { t: number; texto: string }[] = []
   let inicio: number | null = null
+  let fin: number | null = null
+  let titulo = ''
+  let tituloApp = ''
   for (const { texto, principal } of textos) {
     // sin marcas de turno (un Claude Code de antes), un turno empieza con cada mensaje que no es un resultado
     const conTurnos = texto.includes('"turnPosition"')
@@ -130,6 +140,9 @@ export function analiza(textos: { texto: string; principal: boolean }[]): Analis
         // una línea a medio escribir: la última, mientras trabaja
         continue
       }
+      // el nombre va en su propia línea, sin hora; con la sesión viva lo da la app, y este es para las que ya no lo están
+      if (principal && x.customTitle) titulo = x.customTitle
+      if (principal && x.aiTitle) tituloApp = x.aiTitle
       const t = Date.parse(x.timestamp ?? '')
       if (!Number.isFinite(t)) continue
       if (x.uuid) {
@@ -138,6 +151,7 @@ export function analiza(textos: { texto: string; principal: boolean }[]): Analis
       }
       const suya = principal && x.isSidechain !== true
       if (suya && (inicio === null || t < inicio)) inicio = t
+      if (suya && (fin === null || t > fin)) fin = t
       if (ag) {
         ag.desde = Math.min(ag.desde, t)
         ag.hasta = Math.max(ag.hasta, t)
@@ -159,9 +173,9 @@ export function analiza(textos: { texto: string; principal: boolean }[]): Analis
           const ent = b.input ?? {}
           if (EDITAN.includes(b.name)) {
             const r = String(ent.file_path ?? ent.notebook_path ?? '')
-            if (r) editados.add(entera(r, x.cwd))
+            if (r) edita(entera(r, x.cwd), t)
           } else if (b.name === 'SendUserFile' && Array.isArray(ent.files)) {
-            for (const f of ent.files) editados.add(entera(String(f), x.cwd))
+            for (const f of ent.files) edita(entera(String(f), x.cwd), t)
           } else if (ORDENES.includes(b.name) && b.id) {
             ordenes.set(b.id, { id: b.id, desde: t, hasta: t, texto: String(ent.command ?? ''), cwd: x.cwd ?? '' })
           } else if ((b.name === 'Agent' || b.name === 'Task') && b.id) llamadas.add(b.id)
@@ -248,9 +262,13 @@ export function analiza(textos: { texto: string; principal: boolean }[]): Analis
   // sesión no trabaja, a ninguno)
   let tok = 0
   let peso = 0
+  const dias: Analisis['dias'] = {}
   for (const u of usos.values()) {
     tok += u.n
     peso += u.peso
+    const dia = dias[diaDe(u.t)] ?? (dias[diaDe(u.t)] = { tok: 0, peso: 0 })
+    dia.tok += u.n
+    dia.peso += u.peso
     const de = agentes[u.ag]
     if (de) {
       de.tok += u.n
@@ -271,8 +289,9 @@ export function analiza(textos: { texto: string; principal: boolean }[]): Analis
     }
   }
   return {
-    inicio, tok, peso, tramos, editados: [...editados], ordenes: [...ordenes.values()], agentes,
+    inicio, tok, peso, tramos, editados, ordenes: [...ordenes.values()], agentes,
     fallidos: [...mal].filter(id => llamadas.has(id)).length, preguntas: preguntasDe(lotes, respuestas),
+    dias, fin, titulo: titulo || tituloApp,
   }
 }
 
@@ -333,14 +352,15 @@ const SCRIPT = /\.(c?js|mjs|ts|py|ps1|cmd|bat|sh)$/i
 const SALTA = /^(node_modules|\.git|file-history|\$recycle\.bin|__pycache__)$/i
 type Entrada = { name: string; kind: string; mtimeMs?: number }
 
-// Los archivos que ha tocado, en `ya`: los que escribe con sus herramientas o te manda, y los que crean, cambian, mueven
-// o borran sus órdenes (un script que hace recortes o páginas): de cada orden acabada y aún sin mirar, las rutas que
-// nombra y, en sus carpetas, lo cambiado mientras corría. Cada archivo cuenta una vez, le haga lo que le haga. Lo de
-// Claude Code (`casa`: sus transcripciones, sus copias, las fichas del mod), en las órdenes no cuenta: cambia solo,
-// mientras corren. Como mucho `tope` entradas por vuelta
-export async function tocados($: any, a: Analisis, hechas: Set<string>, ya: Set<string>, ahora: number, casa = '',
+// Los archivos que ha tocado, en `ya`, cada uno con cuándo: los que escribe con sus herramientas o te manda, y los que
+// crean, cambian, mueven o borran sus órdenes (un script que hace recortes o páginas): de cada orden acabada y aún sin
+// mirar, las rutas que nombra y, en sus carpetas, lo cambiado mientras corría. Cada archivo cuenta una vez, le haga lo
+// que le haga. Lo de Claude Code (`casa`: sus transcripciones, sus copias, las fichas del mod), en las órdenes no cuenta:
+// cambia solo, mientras corren. Como mucho `tope` entradas por vuelta
+export async function tocados($: any, a: Analisis, hechas: Set<string>, ya: Map<string, number>, ahora: number, casa = '',
   tope = 4000): Promise<void> {
-  for (const r of a.editados) ya.add(r)
+  const toca = (r: string, t: number) => ya.set(r, Math.min(ya.get(r) ?? t, t))
+  for (const [r, t] of Object.entries(a.editados)) toca(r, t)
   const nuevas = a.ordenes.filter(o => !hechas.has(o.id) && (o.hasta > o.desde || ahora - o.desde > 3600000))
   if (!nuevas.length) return
   const ventanas = nuevas.map(o => [o.desde - 2000, o.hasta + 2000] as const)
@@ -369,12 +389,12 @@ export async function tocados($: any, a: Analisis, hechas: Set<string>, ya: Set<
       if (suyo(r)) continue
       const st = await estado(r)
       if (!st) {
-        if (quita && (await estado(padre(r)))?.kind === 'dir') ya.add(r)
+        if (quita && (await estado(padre(r)))?.kind === 'dir') toca(r, o.desde)
         continue
       }
       if (st.kind === 'dir') mira(r, 2)
       else if (st.kind === 'file') {
-        if (dentro(st.mtimeMs)) ya.add(r)
+        if (dentro(st.mtimeMs)) toca(r, st.mtimeMs)
         mira(padre(r), 0)
         const abuelo = padre(padre(r))
         if (SCRIPT.test(r) && raiz && abuelo.startsWith(raiz)) mira(abuelo, 3)
@@ -394,7 +414,7 @@ export async function tocados($: any, a: Analisis, hechas: Set<string>, ya: Set<
     for (const f of lista) {
       const r = norm(`${dir}/${f.name}`)
       if (suyo(r)) continue
-      if (f.kind === 'file' && dentro(f.mtimeMs)) ya.add(r)
+      if (f.kind === 'file' && dentro(f.mtimeMs)) toca(r, f.mtimeMs as number)
       else if (f.kind === 'dir' && nivel > 0 && !SALTA.test(f.name)) await recorre(r, nivel - 1)
     }
   }

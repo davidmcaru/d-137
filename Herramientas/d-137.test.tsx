@@ -10,6 +10,8 @@ import { gastadoDesde, horasDe, porSesion, ventanaSemana } from './hooks/calculo
 import { dolares, letra, millones } from './hooks/comun'
 import { cabezaDe, spriteDe } from './hooks/dibujos'
 import { nombreTag, restoDe, rotuloDe, sana, TAGS } from './hooks/fichas'
+import { esteMes, historicoDe, mesesDe, totalesDe } from './hooks/historico'
+import { informeHtml } from './hooks/informe'
 import { analiza, anterioresDe, rutasDe } from './hooks/sesion'
 import { tokensDe, usoDe } from './hooks/tokens'
 
@@ -41,7 +43,7 @@ test('D-137: fichas, frenos, Activo, Decisión, Cuota, panel y franja', async ($
   })
   pon(`${CASA}/coordinador/otra1.json`, otra1())
   pon(`${CASA}/coordinador/otra2.json`, ficha('otra2', {
-    tag: 'M-03', nombre: 'Web - Revisión de textos', rotulo: 'Web', estado: 'trabajando', turno: AHORA - 495000, recarga: true,
+    tag: 'M-03', nombre: 'Web - Revisión de textos', rotulo: 'Web', estado: 'trabajando', turno: AHORA - 495000, recarga: true, parar: true,
     paso: 'Puliendo los textos de la portada', archivos: [{ ruta: 'c:/proyectos/mi-web/compartido.md', desde: AHORA }],
     tocados: ['c:/proyectos/mi-web/a.txt', 'c:/proyectos/mi-web/compartido.md'], repo, enlace: 'claude://claude.ai/epitaxy/local_web',
     marcha: [{ id: 'r9', que: 'Vídeo de la portada en 4K', tipo: 'orden', desde: AHORA - 192000, linea: 'fotograma 812 de 2400' },
@@ -155,7 +157,7 @@ test('D-137: fichas, frenos, Activo, Decisión, Cuota, panel y franja', async ($
   on('fs.read', (_, e: any) => {
     const f = fs.get(norma(e.path))
     if (!f) throw new Error(`ENOENT ${norma(e.path)}`)
-    return { value: f.text }
+    return { value: e.as === 'bytes' ? { base64: 'JVBERi0=' } : f.text }
   })
   on('fs.write', (_, e: any) => {
     fs.set(norma(e.path), { text: e.text, mtimeMs: reloj.now() })
@@ -176,9 +178,17 @@ test('D-137: fichas, frenos, Activo, Decisión, Cuota, panel y franja', async ($
   }) as any)
   on('agent.list', () => ({ value: [{ id: 'ag1', description: 'Revisar los enlaces', type: 'general-purpose', status: 'running' }] }) as any)
   const ordenes: string[][] = []
+  // Chrome, que saca el PDF de la página que hay en ese momento
+  fs.set('C:/Program Files/Google/Chrome/Application/chrome.exe', { text: '', mtimeMs: AHORA })
+  let impresa = ''
   on('process.run', (_, e: any) => {
     const argv = e.argv as string[]
     ordenes.push(argv)
+    const aPdf = argv.find(a => a.startsWith('--print-to-pdf='))
+    if (aPdf) {
+      impresa = fs.get(`${CASA}/d-137/informe-historico.html`)?.text ?? ''
+      fs.set(norma(aPdf.slice('--print-to-pdf='.length)), { text: 'PDF', mtimeMs: reloj.now() })
+    }
     const sale = argv.includes('rev-parse') ? 'C:/Proyectos/mi-web\n'
       : argv.includes('--show-current') ? 'main\n'
         : argv.includes('status') ? ' M a.txt\n M compartido.md\n?? nuevo.txt\n' : ''
@@ -230,15 +240,36 @@ test('D-137: fichas, frenos, Activo, Decisión, Cuota, panel y franja', async ($
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('turn.start', (_, e: any) => ({ turnId: e.turnId }) as any)
   on('turn.complete', (_, e: any) => ({ text: e.text ?? '' }))
-  on('tool.call', (_, e: any) => (e.run_in_background
+  on('tool.call', (_, e: any) => (e.tool === 'TaskStop' && e.task_id === 'terco'
+    ? { isError: true, result: 'Error', text: '<tool_use_error>No se deja</tool_use_error>' }
+    : e.tool === 'TaskStop' && e.task_id === 'ido'
+    ? { isError: true, result: 'Error', text: '<tool_use_error>No task found with ID: ido</tool_use_error>' }
+    : e.run_in_background
     ? { result: { backgroundTaskId: 'b123', stdout: '', stderr: '', interrupted: false },
       text: 'Command running in background with ID: b123. Output is being written to: C:/tmp/tasks/b123.output. You will be notified when it completes.' }
     : { result: {} }) as any)
   on('prompt.compose', () => ({ sections: [] }))
+  // lo de la carpeta de antes (hasta el 3-nov, coordinador): un histórico, la pestaña elegida y un PDF; y la pestaña que
+  // otra sesión ya ha escrito en la nueva, que no se pisa
+  pon(`${CASA}/coordinador/historico/vieja9.json`, { id: 'vieja9', nombre: 'De antes', inicio: AHORA - 1e9, fin: AHORA - 9e8, dias: {} })
+  pon(`${CASA}/coordinador/vista.json`, { pestana: 'doc', t: AHORA - 5000 })
+  pon(`${CASA}/d-137/vista.json`, { pestana: 'marty', t: AHORA - 1000 })
+  fs.set(`${CASA}/coordinador/informe-historico.pdf`, { text: '%PDF', mtimeMs: AHORA })
 
   await $.session.start({ cwd: 'C:\\Proyectos\\mi-web', surface: 'desktop', isInteractive: true })
   await reloj.settle()
-  const mia = () => JSON.parse(fs.get(`${CASA}/coordinador/yo-123.json`)?.text ?? '{}')
+  // la carpeta compartida es d-137 (3-nov): lo de la de antes se copia la primera vez, antes de leer nada, sin pisar
+  // lo que ya esté, con su marca; la de antes no se toca
+  const leeJson = (ruta: string) => JSON.parse(fs.get(`${CASA}/${ruta}`)?.text ?? '{}')
+  expect(fs.has(`${CASA}/d-137/.migrado`)).toBe(true)
+  expect(leeJson('d-137/otra1.json').tag).toBe('Liz')
+  expect(leeJson('d-137/registro/otra1.json').rotulo).toBe('Agenda')
+  expect(leeJson('d-137/historico/vieja9.json').nombre).toBe('De antes')
+  expect(leeJson('d-137/cuota.json').dias['2026-11-14'].fin).toBe(34)
+  expect(leeJson('d-137/vista.json').pestana).toBe('marty')
+  expect(fs.has(`${CASA}/d-137/informe-historico.pdf`)).toBe(false)
+  expect(fs.has(`${CASA}/coordinador/otra1.json`)).toBe(true)
+  const mia = () => JSON.parse(fs.get(`${CASA}/d-137/yo-123.json`)?.text ?? '{}')
   // un personaje libre, al azar: ni el de otra sesión viva (Liz, M-03, M-05, M-01) ni los que se quitaron (M-06, M-07)
   const LIBRES = TAGS.filter(t => !['Liz', 'M-03', 'M-05', 'M-01'].includes(t))
   expect(LIBRES).toContain(mia().tag)
@@ -289,7 +320,7 @@ test('D-137: fichas, frenos, Activo, Decisión, Cuota, panel y franja', async ($
   expect(marcha().find(t => t.id === 'b123')?.linea).toBe('miniatura 134 de 192')
   expect(marcha().some(t => t.id === 'ag1')).toBe(true)
   // La cuota de todas: esta sesión es la que llegó antes de las que van con el panel nuevo, y la apunta
-  const cuota = () => JSON.parse(fs.get(`${CASA}/coordinador/cuota.json`)?.text ?? '{}')
+  const cuota = () => JSON.parse(fs.get(`${CASA}/d-137/cuota.json`)?.text ?? '{}')
   expect(cuota().ultimo.pct).toBeGreaterThanOrEqual(37)
 
   await $.tool.call({
@@ -306,7 +337,7 @@ test('D-137: fichas, frenos, Activo, Decisión, Cuota, panel y franja', async ($
   expect(mia().toca).toEqual(['¿Paso la portada a las demás páginas?'])
   expect(mia().decisiones[0].contexto).toBe('La portada nueva está solo en el inicio.')
   expect(mia().hecho).toBe('Enviada la portada nueva, 1 a 4')
-  const registro = JSON.parse(fs.get(`${CASA}/coordinador/registro/yo-123.json`)?.text ?? '{}')
+  const registro = JSON.parse(fs.get(`${CASA}/d-137/registro/yo-123.json`)?.text ?? '{}')
   expect(registro.dias[hoy].hechos[0].texto).toBe('Enviada la portada nueva, 1 a 4')
   // los dólares, a medida que suben (de 1 a 2), una sola vez aunque haya habido un subagente, y en su hora
   expect(Math.round(registro.dias[hoy].usd * 10)).toBe(10)
@@ -427,8 +458,37 @@ test('D-137: fichas, frenos, Activo, Decisión, Cuota, panel y franja', async ($
 
   await ui.press({ key: 'tab-doc' })
   await tiene(/Doc/, /Sesiones · 5/, /Lo que necesita de ti/, /Bloqueo/)
-  // con su ficha desplegada, el bloque de todas: aquí solo esta trae su resumen (las demás son de mods de antes)
-  await tiene(/Activa[ |]*1:55\u00a0h/, /4,30\u00a0M/, /2,00\u00a0\$/, /Archivos[ |]*6/)
+  // con su ficha desplegada, el bloque de todas las de este mes, del día 1 a hoy (3-nov): de momento, esta, que guarda
+  // lo suyo y trae lo de la sesión de la que sigue
+  await tiene(/Del 1 al 15 de nov\. · 1 sesión/, /Activa[ |]*1:55\u00a0h/, /4,30\u00a0M/, /2,00\u00a0\$/, /Archivos[ |]*6/)
+  // el informe: la primera vez lee lo que falta (Agenda, de la que solo hay registro, con 5 $; las demás son de mods de antes
+  // y no han gastado) y se abre al acabar; después, la página, que se abre, y una línea por mes en el chat
+  const leyendo: any = await $.command.run({ command: 'historico' } as any)
+  expect(String(leyendo.text)).toContain('el informe se abre solo')
+  await reloj.advance(200)
+  await reloj.settle()
+  const informe: any = await $.command.run({ command: 'historico' } as any)
+  await reloj.settle()
+  expect(String(informe.text)).toContain('Histórico: 2 sesiones desde nov.\u00a02026.')
+  expect(String(informe.text)).toContain('nov.\u00a02026: 7,00\u00a0$ · 4,30\u00a0M · activa 1:55\u00a0h · 6 archivos')
+  expect(String(informe.text)).toContain('C:\\Users\\prueba\\.claude\\d-137\\informe-historico.html')
+  expect(fs.get(`${CASA}/d-137/informe-historico.html`)?.text).toContain('Portada nueva')
+  expect(fs.get(`${CASA}/d-137/informe-historico.html`)?.text).toContain('Agenda - Agenda')
+  // el PDF sale de la versión con cada mes desplegado, y la página lo lleva dentro, para descargarlo de un clic (2-nov)
+  const pagina = fs.get(`${CASA}/d-137/informe-historico.html`)?.text ?? ''
+  expect(impresa).toContain('<section class="un-mes">')
+  expect(impresa).toContain('<details open>')
+  expect(pagina).toContain('size: A4 portrait')
+  // el panel del total va el primero, con los meses como si fueran las sesiones; es lo único abierto en la página
+  expect(pagina.split('<details open>')).toHaveLength(2)
+  expect(pagina).toContain('<details open><summary><div class="fila"><div class="mes">Total</div>')
+  expect(pagina).toContain('<th>Mes</th><th>Coste</th>')
+  expect(impresa.indexOf('>Total<')).toBeLessThan(impresa.indexOf('<th>Sesión</th>'))
+  expect(pagina).toContain(`download="Histórico de Doc ${hoy}.pdf" href="data:application/pdf;base64,JVBERi0="`)
+  const aPdf = ordenes.find(o => o.some(a => a.startsWith('--print-to-pdf='))) ?? []
+  expect(aPdf[0]).toBe('C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe')
+  expect(aPdf).toContain('--print-to-pdf=C:\\Users\\prueba\\.claude\\d-137\\informe-historico.pdf')
+  expect(aPdf).toContain('file:///C:/Users/prueba/.claude/d-137/informe-historico.html')
   await vuelca('doc')
   // la casilla entera: el clic llega de su zona (toque.tsx) con su clave
   await ui.pointer({ type: 'down', x: 3, y: 0, button: 'left', in: 'sel-otra1-t' })
@@ -462,7 +522,7 @@ test('D-137: fichas, frenos, Activo, Decisión, Cuota, panel y franja', async ($
   expect(mensajes.some(m => (m.to === 'otra1' || m.to?.sessionId === 'otra1') && String(m.text) === 'D-137 · respuesta: 1b; 2: Tras probar en el móvil')).toBe(true)
   // el tick de lo mandado se va solo en cuanto Agenda se pone a trabajar con la respuesta
   expect((await ui.findAll({ key: 'f-otra1-p-p' })).length).toBe(1)
-  pon(`${CASA}/coordinador/otra1.json`, { ...otra1(), toca: [], decisiones: [], estado: 'trabajando', turno: reloj.now() + 1000 })
+  pon(`${CASA}/d-137/otra1.json`, { ...otra1(), toca: [], decisiones: [], estado: 'trabajando', turno: reloj.now() + 1000 })
   await reloj.advance(4000)
   await reloj.settle()
   expect((await ui.findAll({ key: 'f-otra1-p-p' })).length).toBe(0)
@@ -475,6 +535,13 @@ test('D-137: fichas, frenos, Activo, Decisión, Cuota, panel y franja', async ($
   // con su ficha desplegada, el bloque de los agentes de todas: uno de 3 min, que acabó mal
   await tiene(/Media[ |]*0:03\u00a0h/, /Fallidos[ |]*1/)
   await vuelca('genio')
+  // ■ en lo de otra sesión (1-nov), con su segunda pulsación: se lo pide a ella, que es la que puede
+  const mandados1 = mensajes.length
+  await ui.press({ key: 'mb-para-r9-pide' })
+  await tiene(/Parar/)
+  await ui.press({ key: 'mb-para-r9-si' })
+  await reloj.settle()
+  expect(mensajes.slice(mandados1).map(m => [m.to?.sessionId ?? m.to, m.text])).toEqual([['otra2', 'D-137 · para r9 yo-123']])
   await ui.press({ key: 'v-acabados' })
   await tiene(/Pruebas del formulario/)
   await vuelca('genio-acabados')
@@ -661,8 +728,44 @@ test('D-137: fichas, frenos, Activo, Decisión, Cuota, panel y franja', async ($
   await reloj.advance(400)
   await reloj.settle()
   expect(escritas()).toBe(4)
+  // lo que pide ■ en el panel de otra sesión se para aquí, sin pasárselo a Claude; si ya no corre, sale igual de lo que
+  // sigue en marcha; y si no se puede, se lo dice, y aquella lo enseña
+  await $.tool.call({ tool: 'Bash', command: 'python largo.py', description: 'Un render largo', run_in_background: true } as any)
+  await reloj.settle()
+  const pideParar: any = await $.session.receive({ origin: { kind: 'peer', plugin: 'd-137' }, text: MARCO('D-137 · para b123 otra2') } as any)
+  expect(String(pideParar?.consumed ?? '')).toContain('parar')
+  await reloj.advance(200)
+  await reloj.settle()
+  expect(mia().acabadas.find((x: any) => x.id === 'b123')?.estado).toBe('killed')
+  const mandados2 = mensajes.length
+  await $.session.receive({ origin: { kind: 'peer', plugin: 'd-137' }, text: MARCO('D-137 · para ido otra2') } as any)
+  await reloj.advance(200)
+  await reloj.settle()
+  expect(mensajes.slice(mandados2)).toEqual([])
+  await $.session.receive({ origin: { kind: 'peer', plugin: 'd-137' }, text: MARCO('D-137 · para terco otra2') } as any)
+  await reloj.advance(200)
+  await reloj.settle()
+  expect(mensajes.slice(mandados2).map(m => [m.to?.sessionId ?? m.to, m.text])).toEqual([['otra2', 'D-137 · no se pudo parar «terco»: No se deja']])
+  const noPudo: any = await $.session.receive({ origin: { kind: 'peer', plugin: 'd-137' }, text: MARCO('D-137 · no se pudo parar «Render»: No se deja') } as any)
+  expect(String(noPudo?.consumed ?? '')).toContain('parar')
+  expect(avisos[avisos.length - 1]).toBe('No se pudo parar «Render»: No se deja')
   const ajena: any = await $.session.receive({ origin: { kind: 'peer' }, text: MARCO('D-137 · recarga el mod') } as any)
   expect(ajena?.consumed).toBeUndefined()
+  // al reabrir una sesión su coste sale a cero y vuelve a lo que llevaba: no es gasto nuevo (hasta el 1-nov, se
+  // apuntaba otra vez todo); de ahí en adelante, lo que suba sí
+  const apuntado = () => JSON.parse(fs.get(`${CASA}/d-137/registro/yo-123.json`)?.text ?? '{}')
+  const llevaba = usd
+  const hoyAntes = apuntado().dias[hoy].usd
+  usd = 0
+  await $.turn.start({ text: 'sigo', turnId: 't10' } as any)
+  await reloj.settle()
+  expect(apuntado().alto).toBe(llevaba)
+  usd = llevaba + 0.5
+  await $.turn.complete({ turnId: 't10', answer: 'ya', text: 'ya', durationMs: 1000, isAborted: false, reason: 'answer' } as any)
+  await reloj.settle()
+  expect(apuntado().visto).toBe(llevaba + 0.5)
+  expect(apuntado().alto).toBeUndefined()
+  expect(Math.round(apuntado().dias[hoy].usd * 100)).toBe(Math.round((hoyAntes + 0.5) * 100))
 })
 
 test('La cabeza de cada personaje y las filas de «Cuándo lo usas»', async () => {
@@ -718,6 +821,76 @@ test('La cabeza de cada personaje y las filas de «Cuándo lo usas»', async () 
   const g2 = { dias: {}, horas: { '2026-10-26': hoy, '2026-10-27': martes } }
   const entre = horasDe(g2, new Date(2026, 9, 27, 10, 30, 0).getTime(), false, false)[0]?.valores ?? []
   expect([entre[9], entre[15]]).toEqual([0.5, 0.6])
+})
+
+test('El histórico: lo de cada día, lo que sigue de otra, lo borrado y lo de antes del mod', async () => {
+  const MIN = 60000
+  const iso = (t: number) => new Date(t).toISOString()
+  const turno = (id: string, t: number, min: number, tok: number) => [
+    JSON.stringify({ type: 'user', uuid: `${id}u`, timestamp: iso(t), turnPosition: { promptIndex: 1 }, message: { content: 'hola' } }),
+    JSON.stringify({ type: 'assistant', uuid: `${id}a`, timestamp: iso(t + MIN), requestId: `r${id}`, message: { id: `m${id}`, usage: { input_tokens: tok, output_tokens: 0 } } }),
+    JSON.stringify({ type: 'system', subtype: 'stop_hook_summary', uuid: `${id}f`, timestamp: iso(t + min * MIN) }),
+  ].join('\n')
+  const lee = (...turnos: string[]) => analiza([{ texto: turnos.join('\n'), principal: true }])
+  const sep30 = new Date(2026, 8, 30, 12).getTime()
+  const oct2 = new Date(2026, 9, 2, 12).getTime()
+  const base = { id: 's1', tag: 'M-03', rotulo: 'Web', nombre: 'Web - Portada' }
+  // el coste de la sesión, repartido por lo que pesa cada día, diga lo que diga lo apuntado por días
+  const dos = lee(turno('a', sep30, 10, 1000), turno('b', oct2, 20, 3000))
+  const r = { ...base, visto: 100, dias: { '2026-10-02': { usd: 180, hechos: [] } } }
+  const h1 = historicoDe(null, dos, r, { id: 's1', nombre: 'Web - Portada', fin: oct2 + 3600000, leido: 5, sigue: ['p0'] })
+  expect(h1.dias['2026-09-30']).toEqual({ usd: 25, peso: 1000, tok: 1000, activa: 10 * MIN, maxT: 10 * MIN, maxTok: 1000, maxPeso: 1000, archivos: 0 })
+  expect(h1.dias['2026-10-02']?.usd).toBe(75)
+  expect(h1.inicio).toBe(sep30)
+  // lo que el registro ha olvidado, o una transcripción que ya no está, se queda; y lo nuevo se suma
+  const h2 = historicoDe(h1, lee(turno('c', oct2 + 2 * 3600000, 5, 500)), { ...base, visto: 110, dias: {} },
+    { id: 's1', nombre: 'Web - Portada', fin: oct2 + 3 * 3600000 })
+  expect(h2.dias['2026-09-30']?.usd).toBe(27.5)
+  expect(h2.dias['2026-09-30']?.tok).toBe(1000)
+  expect(h2.dias['2026-10-02']?.usd).toBe(82.5)
+  expect(h2.dias['2026-10-02']?.tok).toBe(3000)
+  // y el coste no baja aunque el contador de la sesión lo haga
+  expect(Object.values(historicoDe(h2, analiza([]), { ...base, visto: 3, alto: 120, dias: {} }, { id: 's1', fin: oct2 }).dias).reduce((s, x) => s + x.usd, 0)).toBe(120)
+  expect(h2.sigue).toEqual(['p0'])
+  expect(h2.leido).toBe(5)
+  // la de la que sigue no cuenta aparte: su coste y sus tokens ya van en esta
+  const seguida = historicoDe(null, lee(turno('p', sep30 - 86400000, 10, 900)), { ...base, id: 'p0', nombre: 'Web de antes', visto: 40, dias: {} }, { id: 'p0', fin: sep30 })
+  // una sesión borrada antes de que hubiera histórico: lo de toda la sesión, repartido entre los días que recuerda su registro
+  const borrada = historicoDe(null, analiza([]), { ...base, id: 'b1', nombre: '12 candidaturas', visto: 190,
+    dias: { '2026-10-29': { usd: 100, tok: 2e6, hechos: [] }, '2026-10-30': { usd: 50, tok: 1e6, hechos: [] } },
+    sesion: { inicio: oct2, activa: 3600000, maxT: 1800000, maxTok: 5e5, maxPeso: 100, peso: 1000, tok: 6e6, archivos: 12 } }, { id: 'b1', fin: oct2 + 86400000 })
+  const cuenta = (campo: 'usd' | 'tok' | 'activa' | 'archivos') => Object.values(borrada.dias).reduce((s, x) => s + x[campo], 0)
+  expect([cuenta('usd'), cuenta('tok'), cuenta('activa'), cuenta('archivos')]).toEqual([190, 6e6, 3600000, 12])
+  // y una de antes del mod, sin coste: sale de lo que pesa, a lo que vale el peso en las demás
+  const vieja = historicoDe(null, lee(turno('v', sep30, 6, 2000)), null, { id: 'v1', fin: sep30 + 6 * MIN })
+  expect(vieja.nombre).toBe('v1')
+  const vacia = historicoDe(null, analiza([]), null, { id: 'nada', fin: oct2 })
+  const hs = [h2, seguida, borrada, vieja, vacia]
+  const meses = mesesDe(hs, oct2 + 4 * 3600000, new Set())
+  expect(meses.map(m => m.mes)).toEqual(['2026-09', '2026-10'])
+  expect(meses[0]?.sesiones.map(s => s.nombre)).toEqual(['v1', 'Web - Portada'])
+  expect(meses[1]?.usd).toBe(82.5 + 190)
+  expect(meses[1]?.sesiones.map(s => s.nombre)).toEqual(['12 candidaturas', 'Web - Portada'])
+  expect(meses[0]?.estimado).toBe(true)
+  expect(meses[1]?.estimado).toBe(false)
+  const peso = 1000 + 3000 + 1000
+  const precio = (110 + 190) / peso
+  expect(Math.round((meses[0]?.usd ?? 0) * 1000)).toBe(Math.round((27.5 + 2000 * precio) * 1000))
+  // el tiempo abierto, en el mes en que pasó: Web, de septiembre a octubre
+  const finSep = new Date(2026, 9, 1).getTime()
+  expect(meses[0]?.abierta).toBe(finSep - sep30 + 6 * MIN)
+  const t = totalesDe(hs, oct2 + 4 * 3600000, new Set())
+  expect(t?.n).toBe(3)
+  expect(t?.desde).toBe(sep30)
+  expect(t?.estimado).toBe(true)
+  expect(t?.tok).toBe(1000 + 3000 + 6e6 + 2000)
+  expect(totalesDe([vacia], 0, new Set())).toBeNull()
+  // la ficha de Doc, solo lo de este mes, del día 1 a hoy (3-nov): octubre, sin lo de septiembre; y un mes sin nada, a cero
+  const oct = esteMes(hs, oct2 + 4 * 3600000, new Set())
+  expect([oct.n, oct.usd, oct.tok, oct.desde]).toEqual([2, 82.5 + 190, 3000 + 6e6, new Date(2026, 9, 1).getTime()])
+  expect(esteMes(hs, new Date(2026, 11, 5).getTime(), new Set()).n).toBe(0)
+  // sin Chrome ni Edge, el botón abre la ventana de imprimir, que también guarda en PDF
+  expect(informeHtml(meses, t as NonNullable<typeof t>, oct2)).toContain('onclick="print()"')
 })
 
 test('El rótulo, la semana desde el lunes, lo de cada sesión y los tokens', async () => {
@@ -893,7 +1066,7 @@ async function bancoDimension($: any, on: any) {
 
   await $.session.start({ cwd: 'C:\\Proyectos\\mi-web', surface: 'desktop', isInteractive: true })
   await reloj.settle()
-  const mia = () => JSON.parse(fs.get(`${CASA}/coordinador/yo-123.json`)?.text ?? '{}')
+  const mia = () => JSON.parse(fs.get(`${CASA}/d-137/yo-123.json`)?.text ?? '{}')
   const ui: any = await $.ui.mount({ plugin: 'd-137', surface: 'desktop', component: 'Pane', requestId: 'd-137', props: PANE } as any)
   const textos = async () => (await ui.findAll({})).map((x: any) => [x.text, x.props?.alt].filter(Boolean).join(' ')).join(' | ')
   return { mia, textos }

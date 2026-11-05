@@ -167,8 +167,9 @@ export function pestanaGenio(el: El, d: Datos, a: Acciones): RenderElement[] {
             const botones: unknown[] = []
             if (tp === 'servidor' && enlace) botones.push(boton(el, `mb-cp-${f.id}-${t.id}`, { icono: 'copiar', tipo: 'ib', alto: 26 }, (ev?: any) => a.copia(enlace, ev?.surface)))
             if (mia && t.salida) botones.push(boton(el, `mb-ver-${f.id}-${t.id}`, { icono: 'terminal', tipo: 'ib', alto: 26 }, () => a.verSalida(t)))
-            if (mia && !t.fin) {
-              botones.push(...confirmar(el, d, a, { clave: `mb-para-${t.id}`, id: `parar-${t.id}`, etiqueta: '■', no: 'No', si: 'Parar', hace: s => a.para(t, s) }))
+            // también lo de otra sesión, si su mod entiende que se lo pidan (1-nov)
+            if (!t.fin && (mia || f.parar)) {
+              botones.push(...confirmar(el, d, a, { clave: `mb-para-${t.id}`, id: `parar-${t.id}`, etiqueta: '■', no: 'No', si: 'Parar', hace: s => a.para(t, s, mia ? undefined : f) }))
             }
             if (!mia) botones.push(boton(el, `mb-ses-${f.id}-${t.id}`, { icono: 'ojo', tipo: 'ib', alto: 26 }, () => a.abreSesion(f)))
             return [i ? separador(el, `it-l-${f.id}-${t.id}`) : null, (

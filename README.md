@@ -49,7 +49,7 @@ lo eliges al instalarlo), lo que corre en ellas y lo que te ha entregado, para a
 ### Todas: ¿cuál me necesita?
 
 Todas las sesiones: cuáles trabajan, esperan o están bloqueadas, cuánto llevan así, quién espera a quién y lo que
-necesita de ti, por orden.
+necesita de ti, por orden. Y lo gastado por todas las que ha habido, aunque se borren.
 
 <img src="Capturas/pestana-todas.png" alt="La pestaña Todas: lo que necesita de ti, primero la sesión bloqueada y después las que esperan, cada una con su frase" width="580">
 
@@ -89,7 +89,7 @@ La cuota: la semana, hoy y las 5 horas, si vas por encima o por debajo del ritmo
   abiertas, para recargar el mod con un Enter en cada una.
 - **Avisos** cuando otra sesión termina o te necesita.
 - **Todo se queda en tu PC.** El mod no se conecta a nada: lee lo que Claude Code ya guarda en tu carpeta de usuario
-  (`~/.claude`) y apunta lo suyo en `~/.claude/coordinador`.
+  (`~/.claude`) y apunta lo suyo en `~/.claude/d-137`.
 
 ## Instalarlo
 
@@ -169,7 +169,8 @@ La franja viene con ejemplos, y todas sus rutas están en un archivo,
 
 Tras cambiarlo, pulsa «Mods» (en «Más») o escribe `/reload-plugins` en cada sesión.
 
-Una orden más: `/rotulo <texto>` cambia el nombre corto de la sesión en los paneles; sin texto, vuelve al suyo.
+Dos órdenes más: `/rotulo <texto>` cambia el nombre corto de la sesión en los paneles (sin texto, vuelve al suyo), y
+`/historico` abre el informe de todas las sesiones que ha habido, mes a mes, listo para descargar en PDF.
 
 ## Requisitos
 
@@ -185,7 +186,7 @@ Claude Code aún no ha dicho cuándo se renueva tu cuota semanal, el mod supone 
 
 - TypeScript, sin dependencias ni imágenes: cada dibujo es una rejilla de píxeles escrita en el código y pintada en
   SVG.
-- Cada sesión deja su ficha en `~/.claude/coordinador` cada 3 segundos, y el panel de cada una lee las de todas.
+- Cada sesión deja su ficha en `~/.claude/d-137` cada 3 segundos, y el panel de cada una lee las de todas.
 - Las pruebas usan el banco de pruebas de Claude Code: [`Herramientas/d-137.test.tsx`](Herramientas/d-137.test.tsx).
 - Lo que hace cada parte, cómo funciona por dentro y cómo cambiarlo, en [`d-137/README.md`](d-137/README.md).
 

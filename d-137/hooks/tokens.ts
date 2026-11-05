@@ -67,23 +67,23 @@ export function tokensDe(textos: string[]): { total: number; dias: Record<string
 // cambiado
 export type Transcripcion = { ruta: string; size: number; mtimeMs: number }
 type Entrada = { name: string; kind: string; size?: number; mtimeMs?: number }
+async function lista($: any, dir: string): Promise<Entrada[]> {
+  try {
+    return (await $.fs.list(dir)) as Entrada[]
+  } catch {
+    return []
+  }
+}
 export async function transcripcionesDe($: any, casa: string, id: string, proyecto: string | null):
   Promise<{ proyecto: string | null; archivos: Transcripcion[] }> {
   const base = `${casa}/projects`
-  const lista = async (dir: string): Promise<Entrada[]> => {
-    try {
-      return (await $.fs.list(dir)) as Entrada[]
-    } catch {
-      return []
-    }
-  }
   let dir = proyecto
-  let principal = dir ? (await lista(dir)).find(f => f.kind === 'file' && f.name === `${id}.jsonl`) : undefined
+  let principal = dir ? (await lista($, dir)).find(f => f.kind === 'file' && f.name === `${id}.jsonl`) : undefined
   if (!principal) {
     dir = null
-    for (const p of await lista(base)) {
+    for (const p of await lista($, base)) {
       if (p.kind !== 'dir') continue
-      const f = (await lista(`${base}/${p.name}`)).find(x => x.kind === 'file' && x.name === `${id}.jsonl`)
+      const f = (await lista($, `${base}/${p.name}`)).find(x => x.kind === 'file' && x.name === `${id}.jsonl`)
       if (f) {
         dir = `${base}/${p.name}`
         principal = f
@@ -93,8 +93,21 @@ export async function transcripcionesDe($: any, casa: string, id: string, proyec
   }
   if (!dir || !principal) return { proyecto: null, archivos: [] }
   const de = (ruta: string, f: Entrada): Transcripcion => ({ ruta, size: f.size ?? 0, mtimeMs: f.mtimeMs ?? 0 })
-  const subs = (await lista(`${dir}/${id}/subagents`))
+  const subs = (await lista($, `${dir}/${id}/subagents`))
     .filter(f => f.kind === 'file' && f.name.endsWith('.jsonl'))
     .map(f => de(`${dir}/${id}/subagents/${f.name}`, f))
   return { proyecto: dir, archivos: [de(`${dir}/${id}.jsonl`, principal), ...subs] }
+}
+// Todas las sesiones que hay en disco, con la carpeta de su proyecto y la fecha de su transcripción
+export async function sesionesEnDisco($: any, casa: string): Promise<{ id: string; dir: string; mtimeMs: number }[]> {
+  const base = `${casa}/projects`
+  const out: { id: string; dir: string; mtimeMs: number }[] = []
+  for (const p of await lista($, base)) {
+    if (p.kind !== 'dir') continue
+    const dir = `${base}/${p.name}`
+    for (const f of await lista($, dir)) {
+      if (f.kind === 'file' && f.name.endsWith('.jsonl')) out.push({ id: f.name.slice(0, -6), dir, mtimeMs: f.mtimeMs ?? 0 })
+    }
+  }
+  return out
 }

@@ -9,20 +9,25 @@
 import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 
-import type { Cuota, CuotaGlobal, Decision, Entrega, Estado, Ficha, Mandada, Paso, Pestana, Registro, Tarea } from '../types'
+import type {
+  Cuota, CuotaGlobal, Decision, Entrega, Estado, Ficha, Historico, Mandada, Paso, Pestana, Registro, Tarea, TotalesHistorico,
+} from '../types'
 import { AJUSTES, leeAjustes } from './ajustes'
 import { ANALIZAR, ANALIZAR_PRO, PANEL } from './atajos'
 import { apunta, llevaLaCuota, mejorLectura, puntosPorDolar } from './calculos'
 import type { Acciones, Datos } from './comun'
 import { decisionesDe, DESPLEGADOS, letra, sinToque, TOQUES, vistaPasos } from './comun'
 import {
-  carpeta, casa, datosSesion, diaDe, enlaceDe, guarda, guardaGlobal, guardaRegistro, idsEscritorio, leeGlobal, leeRegistros,
-  leeTodas, eligeTag, nombreDe, nombreTag, norm, repoDe, rotuloDe, sana, TAGS,
+  carpeta, casa, datosSesion, diaDe, enlaceDe, guarda, guardaGlobal, guardaHistorico, guardaRegistro, idsEscritorio, leeGlobal,
+  leeHistoricos, leeRegistros, leeTodas, eligeTag, migra, nombreDe, nombreTag, norm, repoDe, rotuloDe, sana, TAGS,
 } from './fichas'
+import { esteMes, historicoDe, mesesDe, totalesDe } from './historico'
+import { informeHtml, informeTexto } from './informe'
 import { pendientesDe, respuestaDe } from './pajaro'
 import { COMMIT, franja, MAS, panel } from './panel'
 import { analiza, anterioresDe, resumenDe, tocados } from './sesion'
-import { tokensDe, transcripcionesDe } from './tokens'
+import type { Analisis } from './sesion'
+import { sesionesEnDisco, tokensDe, transcripcionesDe } from './tokens'
 import type { Transcripcion } from './tokens'
 
 const PANE = 'd-137'
@@ -41,6 +46,10 @@ const MARCA = 'D-137 · respuesta: '
 // Lo que manda «Mods» a las demás sesiones para que su mod se recargue (28-oct)
 const RECARGA = 'D-137 · recarga el mod'
 const RESPUESTA = 'Respuesta desde el panel D-137'
+// Lo que manda ■ de Trabajador a la sesión de lo que hay que parar, que es la única que puede, y lo que esta
+// contesta si no ha podido
+const PARA = 'D-137 · para '
+const NO_PARA = 'D-137 · no se pudo parar '
 
 const ficha = atom({ plugin: 'd-137', key: 'ficha' } as const, null as Ficha | null)
 const otras = atom({ plugin: 'd-137', key: 'otras' } as const, [] as Ficha[])
@@ -59,6 +68,8 @@ const entregas = atom({ plugin: 'd-137', key: 'entregas' } as const, [] as Entre
 const gasto = atom({ plugin: 'd-137', key: 'gasto' } as const, null as number | null)
 const registros = atom({ plugin: 'd-137', key: 'registros' } as const, [] as Registro[])
 const global = atom({ plugin: 'd-137', key: 'global' } as const, { dias: {}, horas: {} } as CuotaGlobal)
+// Lo de todas las sesiones que ha habido, ya sumado, para la ficha de Doc
+const historico = atom({ plugin: 'd-137', key: 'historico' } as const, null as TotalesHistorico | null)
 // Lo de la vista: la pestaña, lo desplegado, lo pulsado y lo elegido en Decisión (por defecto, todo plegado)
 const pestana = atom({ plugin: 'd-137', key: 'pestana' } as const, 'marty' as Pestana)
 const abiertos = atom({ plugin: 'd-137', key: 'abiertos' } as const, {} as Record<string, boolean>)
@@ -354,20 +365,25 @@ const ceros = () => Array.from({ length: 24 }, () => 0)
 // Lo que costó, a medida que llega: lo que ha subido el coste de la sesión desde lo último apuntado (`visto`), en el día
 // y la hora de ahora. Así cada dólar cuenta una vez, también lo de los subagentes, que el coste de la sesión ya suma, y
 // lo que gastan en segundo plano entre turnos (antes se apuntaba lo de cada turno, y los turnos de los subagentes
-// también lo apuntaban: salía dos veces). La primera vez solo toma nota de lo que lleva, que ya estaba apuntado
+// también lo apuntaban: salía dos veces). La primera vez solo toma nota de lo que lleva, que ya estaba apuntado. Al
+// reabrir una sesión el coste sale a cero y enseguida vuelve a lo que llevaba, que no es gasto nuevo (hasta el 1-nov, al reabrir
+// la app, cada sesión apuntaba ese rato todo lo que llevaba costado): `alto` guarda hasta dónde había llegado
 async function apuntaGasto($: any, usd: number | null) {
   if (usd === null) return
   await cambiaRegistro($, (r, ahora) => {
     if (typeof r.visto !== 'number') return { ...r, visto: usd }
-    // un coste que baja es una sesión que vuelve a empezar de cero (un /clear)
-    const mas = usd >= r.visto ? usd - r.visto : usd
-    if (mas < 0.0005) return usd === r.visto ? null : { ...r, visto: usd }
+    if (usd < r.visto) return { ...r, visto: usd, alto: Math.max(r.alto ?? 0, r.visto) }
+    const { alto, ...sinAlto } = r
+    const vuelve = typeof alto === 'number' && usd >= alto
+    const base = vuelve ? sinAlto : r
+    const mas = usd - (vuelve ? alto : r.visto)
+    if (mas < 0.0005) return usd === r.visto ? null : { ...base, visto: usd }
     const dia = diaDe(ahora)
     const x = r.dias[dia] ?? { usd: 0, hechos: [] }
     const usdH = (x.usdH ?? ceros()).slice()
     const h = new Date(ahora).getHours()
     usdH[h] = (usdH[h] ?? 0) + mas
-    return { ...r, visto: usd, dias: { ...r.dias, [dia]: { ...x, usd: x.usd + mas, usdH } } }
+    return { ...base, visto: usd, dias: { ...r.dias, [dia]: { ...x, usd: x.usd + mas, usdH } } }
   })
 }
 // Lo que hizo: lo hecho de cada tarea, con su hora (los últimos 40 del día)
@@ -382,7 +398,8 @@ async function apuntaHecho($: any, texto: string) {
 // Una transcripción entera. Hasta 4 MiB, con $.fs.read; si pesa más, la app no deja leerla de una vez (28-oct:
 // el bloque de Marty salía a cero), y se lee por PowerShell, sin lo que no hace falta: fuera las peticiones a la API y
 // las copias de los archivos, y de cada resultado de una herramienta (casi la mitad del archivo), solo a qué llamada
-// responde y cuándo. Lo leído así se guarda mientras el archivo no cambie (el de una sesión de antes ya no cambia)
+// responde y cuándo. Lo leído así se guarda mientras el archivo no cambie (el de una sesión de antes ya no cambia), salvo
+// lo que solo se lee una vez para el histórico (`recuerda`)
 const ADELGAZA = `$ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 $r = [IO.StreamReader]::new($ruta, [Text.UTF8Encoding]::new($false))
@@ -400,7 +417,7 @@ while ($null -ne ($l = $r.ReadLine())) {
 }
 $o.Flush()`
 const grandes = new Map<string, { clave: string; texto: string }>()
-async function leeTranscripcion($: any, f: Transcripcion): Promise<string> {
+async function leeTranscripcion($: any, f: Transcripcion, recuerda: boolean): Promise<string> {
   if (f.size < 4194304) {
     try {
       return String(await $.fs.read(f.ruta))
@@ -420,30 +437,17 @@ async function leeTranscripcion($: any, f: Transcripcion): Promise<string> {
   } catch {
     return ''
   }
-  grandes.set(f.ruta, { clave, texto })
+  if (recuerda) grandes.set(f.ruta, { clave, texto })
   return texto
 }
-// Lo de sus transcripciones: sus tokens (tokens.ts), cada día y cada hora, y el total; y lo de toda la sesión para el
-// bloque de Marty (sesion.ts), también de las sesiones de las que sigue: sus ratos de trabajo, lo que gastó cada uno y
-// los archivos que ha tocado. Solo si han cambiado, y como mucho cada dos minutos (o al acabar un turno): leerlas cuesta
-// unos 0,1 s por cada 25 MB. Las órdenes ya miradas no se vuelven a mirar
-let proyecto: string | null = null
-let huellaTokens = ''
-let tokensCuando = 0
-const ordenesVistas = new Set<string>()
-const tocadosTodos = new Set<string>()
-async function alDiaSesion($: any, ya = false) {
-  const ahora = await $.clock.now()
-  if (!ya && ahora - tokensCuando < 120000) return
-  tokensCuando = ahora
+// Lo que dicen las transcripciones de una sesión: las suyas y las de las sesiones de las que sigue, la que dice su resumen
+// y, si aquella seguía de otra, también esa
+async function leeSesion($: any, id: string, pista: string | null, recuerda: boolean) {
   const c = await casa($)
-  const id = await $.session.id()
-  const t = await transcripcionesDe($, c, id, proyecto)
-  proyecto = t.proyecto
-  if (!t.archivos.length) return
-  const lee = (f: Transcripcion) => leeTranscripcion($, f)
+  const t = await transcripcionesDe($, c, id, pista)
+  if (!t.archivos.length) return null
+  const lee = (f: Transcripcion) => leeTranscripcion($, f, recuerda)
   const suyos = await Promise.all(t.archivos.map(lee))
-  // las de antes: la que dice su resumen y, si aquella seguía de otra, también esa
   const antes: { texto: string; principal: boolean }[] = []
   const vistas = new Set([id.toLowerCase()])
   let huella = t.archivos.map(f => `${f.ruta}:${f.size}:${f.mtimeMs}`).join('|')
@@ -452,32 +456,176 @@ async function alDiaSesion($: any, ya = false) {
     const otro = pendientes.shift() as string
     if (vistas.has(otro)) continue
     vistas.add(otro)
-    const o = await transcripcionesDe($, c, otro, proyecto)
+    const o = await transcripcionesDe($, c, otro, t.proyecto)
     huella += `|${o.archivos.map(f => `${f.ruta}:${f.size}:${f.mtimeMs}`).join('|')}`
     const textos = await Promise.all(o.archivos.map(lee))
     textos.forEach((texto, i) => antes.push({ texto, principal: i === 0 }))
     pendientes = [...pendientes, ...anterioresDe(textos[0] ?? '', otro)]
   }
-  if (huella === huellaTokens) return
-  huellaTokens = huella
-  const tk = tokensDe(suyos)
-  const an = analiza([...antes, ...suyos.map((texto, i) => ({ texto, principal: i === 0 }))])
-  await tocados($, an, ordenesVistas, tocadosTodos, ahora, norm(c))
-  let empezo: number | undefined
-  try {
-    empezo = (await $.session.usage()).startedAt
-  } catch {
-    empezo = undefined
+  return {
+    ...t, suyos, huella, sigue: [...vistas].slice(1),
+    textos: [...antes, ...suyos.map((texto, i) => ({ texto, principal: i === 0 }))],
   }
-  const sesion = resumenDe(an, tocadosTodos.size, empezo)
-  await cambiaRegistro($, r => {
-    const dias = { ...r.dias }
-    for (const [dia, tokH] of Object.entries(tk.dias)) {
-      const x = dias[dia] ?? { usd: 0, hechos: [] }
-      dias[dia] = { ...x, tok: tokH.reduce((a, b) => a + b, 0), tokH }
+}
+// Lo de sus transcripciones: sus tokens (tokens.ts), cada día y cada hora, y el total; lo de toda la sesión para el
+// bloque de Marty (sesion.ts), también de las sesiones de las que sigue: sus ratos de trabajo, lo que gastó cada uno y
+// los archivos que ha tocado. Solo si han cambiado, y como mucho cada dos minutos (o al acabar un turno): leerlas cuesta
+// unos 0,1 s por cada 25 MB. Las órdenes ya miradas no se vuelven a mirar. Y su histórico, que se queda aunque la sesión se
+// borre: ese, siempre, que el coste sube un poco después que la transcripción y hay que apuntar hasta cuándo se la vio
+let proyecto: string | null = null
+let huellaTokens = ''
+let tokensCuando = 0
+const ordenesVistas = new Set<string>()
+const tocadosTodos = new Map<string, number>()
+let analisis: Analisis | null = null
+let miHistorico: Historico | null = null
+async function alDiaSesion($: any, ya = false) {
+  const ahora = await $.clock.now()
+  if (!ya && ahora - tokensCuando < 120000) return
+  tokensCuando = ahora
+  const id = await $.session.id()
+  const l = await leeSesion($, id, proyecto, true)
+  if (!l) return
+  proyecto = l.proyecto
+  if (l.huella !== huellaTokens) {
+    huellaTokens = l.huella
+    const tk = tokensDe(l.suyos)
+    const an = analiza(l.textos)
+    analisis = an
+    await tocados($, an, ordenesVistas, tocadosTodos, ahora, norm(await casa($)))
+    let empezo: number | undefined
+    try {
+      empezo = (await $.session.usage()).startedAt
+    } catch {
+      empezo = undefined
     }
-    return { ...r, tok: tk.total, dias, sesion }
+    const sesion = resumenDe(an, tocadosTodos.size, empezo)
+    await cambiaRegistro($, r => {
+      const dias = { ...r.dias }
+      for (const [dia, tokH] of Object.entries(tk.dias)) {
+        const x = dias[dia] ?? { usd: 0, hechos: [] }
+        dias[dia] = { ...x, tok: tokH.reduce((a, b) => a + b, 0), tokH }
+      }
+      return { ...r, tok: tk.total, dias, sesion }
+    })
+  }
+  if (!analisis) return
+  miHistorico = historicoDe(miHistorico ?? (await leeHistoricos($)).find(h => h.id === id) ?? null, analisis, miRegistro, {
+    id, nombre: (await read($, ficha))?.nombre, fin: ahora, leido: l.archivos[0]?.mtimeMs, sigue: l.sigue, archivos: tocadosTodos,
   })
+  await guardaHistorico($, miHistorico)
+  await alDiaHistorico($)
+}
+async function abiertas($: any): Promise<Ficha[]> {
+  const yo = await read($, ficha)
+  return [...(yo ? [yo] : []), ...(await read($, otras))]
+}
+// Lo de este mes, del día 1 a hoy, de todas las sesiones, para la ficha de Doc
+async function alDiaHistorico($: any) {
+  const vivas = new Set((await abiertas($)).map(f => f.id))
+  const t = esteMes(await leeHistoricos($), await $.clock.now(), vivas)
+  await update($, historico, () => t)
+}
+// Lo que falta en el histórico, de lo más nuevo a lo más viejo (lo que sigue de otra sesión, antes: así aquella ya no hace
+// falta leerla): las sesiones de antes de que existiera, las que no lo guardan porque llevan el mod de antes, las que se
+// cerraron con algo sin guardar y las borradas de las que solo queda su registro. Las abiertas con este mod guardan lo suyo
+async function porLeer($: any): Promise<{ id: string; dir?: string; mtimeMs: number }[]> {
+  const hs = await leeHistoricos($)
+  const guardadas = new Map(hs.map(h => [h.id, h]))
+  const seguidas = new Set(hs.flatMap(h => h.sigue ?? []))
+  const vivas = new Set((await abiertas($)).filter(f => f.parar).map(f => f.id))
+  const enDisco = await sesionesEnDisco($, await casa($))
+  let registros: { name: string; kind: string; mtimeMs: number }[] = []
+  try {
+    registros = await $.fs.list(`${await carpeta($)}/registro`)
+  } catch {
+    // aún ningún registro
+  }
+  const conDisco = new Set(enDisco.map(s => s.id))
+  const borradas = registros.filter(f => f.kind === 'file' && f.name.endsWith('.json'))
+    .map(f => ({ id: f.name.slice(0, -5), mtimeMs: f.mtimeMs })).filter(s => !conDisco.has(s.id))
+  return [...enDisco, ...borradas].sort((a, b) => b.mtimeMs - a.mtimeMs).filter(s => {
+    const h = guardadas.get(s.id)
+    return !vivas.has(s.id) && !seguidas.has(s.id.toLowerCase()) && (!h || (h.leido ?? 0) < s.mtimeMs - 60000)
+  })
+}
+// Las lee la que lleva la cuota, mientras no trabaja y unos segundos cada medio minuto, hasta que no falte ninguna; con
+// `todo`, de una vez y en cualquier sesión (el informe). Queda guardado lo que iba leyendo si se cierra a medias
+let leyendo = false
+let historicoCompleto = false
+async function importaHistorico($: any, todo = false) {
+  const yo = await read($, ficha)
+  if (!yo || leyendo || (historicoCompleto && !todo)) return
+  if (!todo && ((await read($, estado)) === 'trabajando' || !llevaLaCuota(yo, await abiertas($)))) return
+  leyendo = true
+  try {
+    const t0 = await $.clock.now()
+    const hs = await leeHistoricos($)
+    const seguidas = new Set(hs.flatMap(h => h.sigue ?? []))
+    for (const s of await porLeer($)) {
+      if (seguidas.has(s.id.toLowerCase())) continue
+      if (!todo && (await $.clock.now()) - t0 > 5000) return
+      const l = s.dir ? await leeSesion($, s.id, s.dir, false) : null
+      const an = analiza(l?.textos ?? [])
+      let r: Registro | null = null
+      try {
+        r = JSON.parse(await $.fs.read(`${await carpeta($)}/registro/${s.id}.json`)) as Registro
+      } catch {
+        // una sesión que no llegó a tener el mod
+      }
+      const h = historicoDe(hs.find(x => x.id === s.id) ?? null, an, r, { id: s.id, fin: an.fin ?? s.mtimeMs, leido: s.mtimeMs, sigue: l?.sigue })
+      await guardaHistorico($, h)
+      for (const x of h.sigue ?? []) seguidas.add(x)
+    }
+    historicoCompleto = true
+  } finally {
+    leyendo = false
+  }
+}
+// El PDF de una página, en base64, con el navegador sin ventana: Chrome, que se cierra en cuanto acaba, o Edge, que lo saca
+// en unos segundos y se queda abierto hasta que lo cierra el tiempo de espera, sin dejar nada detrás. Sin ninguno, nada. El
+// tiempo virtual no se nota al esperar y hace que espere a la letra: sin él, unas veces salía con la de Windows
+const NAVEGADORES = ['C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', 'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+  'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', 'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe']
+async function pdfDe($: any, html: string): Promise<string | undefined> {
+  const pdf = html.replace(/\.html$/, '.pdf')
+  const perfil = `${(await $.env.get('TEMP')) ?? (await carpeta($))}\\d-137-pdf`
+  const desde = await $.clock.now()
+  for (const exe of NAVEGADORES) {
+    try {
+      await $.fs.stat(exe)
+    } catch {
+      continue
+    }
+    try {
+      await $.process.run([exe, '--headless=new', '--disable-gpu', '--no-first-run', '--no-pdf-header-footer', '--virtual-time-budget=3000',
+        `--user-data-dir=${perfil}`, `--print-to-pdf=${pdf.replace(/\//g, '\\')}`, encodeURI(`file:///${html}`)], { timeoutMs: 10000 })
+    } catch {
+      // el tiempo de espera: con Edge, lo normal
+    }
+    try {
+      if ((await $.fs.stat(pdf)).mtimeMs >= desde - 2000) return ((await $.fs.read(pdf, { as: 'bytes' })) as { base64: string }).base64
+    } catch {
+      // sin PDF: el siguiente
+    }
+  }
+  return undefined
+}
+// El informe (informe.ts): primero la versión de la que sale el PDF, y luego la página con el PDF dentro, para descargarlo
+// de un clic; la página se abre sola, y esto es lo que se dice en el chat
+async function informe($: any): Promise<string> {
+  const hs = await leeHistoricos($)
+  const ahora = await $.clock.now()
+  const vivas = new Set((await abiertas($)).map(f => f.id))
+  const t = totalesDe(hs, ahora, vivas)
+  if (!t) return 'Aún no hay nada en el histórico.'
+  const meses = mesesDe(hs, ahora, vivas)
+  const ruta = `${await carpeta($)}/informe-historico.html`
+  await $.fs.write(ruta, informeHtml(meses, t, ahora, { desplegado: true }))
+  const pdf = await pdfDe($, ruta)
+  await $.fs.write(ruta, informeHtml(meses, t, ahora, { pdf }))
+  void abreArchivo($, ruta, false)
+  return informeTexto(meses, t, ruta.replace(/\//g, '\\'))
 }
 // Escribe en la caja del mensaje donde esté el cursor, sin borrar lo que hubiera (28-oct: «que inserte ese texto
 // sin borrarme lo del chat»; antes iba encima, con el modo «replace»), con un espacio a cada lado si quedaría pegado a
@@ -674,6 +822,22 @@ async function acabaTarea($: any, id: string, como: string) {
   const nueva = lista.map(t => (t.id === id ? { ...t, fin: ahora, estado: como } : t))
   await update($, marcha, () => nueva)
   await publicaMarcha($, nueva)
+}
+// Para una orden o un agente de esta sesión, con la herramienta del motor, que cuando no puede lo dice en su respuesta. Si
+// ya no lo tiene o ya no corre, es que acabó sin que llegara el aviso: sale igual de lo que sigue en marcha. Devuelve por
+// qué no se pudo
+async function paraTarea($: any, id: string): Promise<string | null> {
+  let fallo = ''
+  try {
+    const r = await $.tool.call({ tool: 'TaskStop', task_id: id })
+    if (r?.deny !== undefined) fallo = String(r.deny)
+    else if (r?.isError) fallo = String(r.text ?? 'error')
+  } catch (err) {
+    fallo = String(err)
+  }
+  if (fallo && !/No task found|is not running/.test(fallo)) return fallo.replace(/<\/?tool_use_error>/g, '').slice(0, 80)
+  await acabaTarea($, id, 'killed')
+  return null
 }
 // Cada pocos segundos: la última línea de cada orden en segundo plano, los agentes que lleva el motor, y fuera lo que
 // acabó hace más de dos horas
@@ -991,8 +1155,8 @@ function acciones($: any): Acciones {
     prueba: texto => {
       void update($, aviso, () => texto)
     },
-    // Parar una orden o un agente de esta sesión, con la herramienta del motor; pide confirmarlo
-    para: (t, seguro) => {
+    // Parar una orden o un agente: de esta sesión, aquí; de otra, se le pide a ella. Pide confirmarlo
+    para: (t, seguro, f) => {
       void (async () => {
         const clave = `parar-${t.id}`
         if (!seguro || (await read($, confirma)) !== clave) {
@@ -1003,23 +1167,27 @@ function acciones($: any): Acciones {
           return
         }
         await update($, confirma, () => '')
-        try {
-          await $.tool.call({ tool: 'TaskStop', task_id: t.id })
-          await acabaTarea($, t.id, 'killed')
-          await update($, aviso, () => `Parada: ${t.que}`)
-        } catch (err) {
-          await update($, aviso, () => `No se pudo parar «${t.que}»: ${String(err).slice(0, 80)}`)
+        if (f) {
+          try {
+            await $.session.send({ to: { sessionId: f.id }, text: `${PARA}${t.id} ${await $.session.id()}` })
+            await update($, aviso, () => `Pedido a ${nombreTag(f.tag)} ${f.rotulo} que pare «${t.que}».`)
+          } catch {
+            await update($, aviso, () => `No se pudo avisar a ${nombreTag(f.tag)}: para «${t.que}» desde su sesión.`)
+          }
+          return
         }
+        const fallo = await paraTarea($, t.id)
+        await update($, aviso, () => (fallo ? `No se pudo parar «${t.que}»: ${fallo}` : `Parada: ${t.que}`))
       })()
     },
   }
 }
 
 async function datos($: any, cols: number, surface = 'desktop'): Promise<Datos> {
-  const [est, lista, loHecho, t0, t1, msg, yo, resto, cu, tareas, dado, g, regs, glo, pl] = await Promise.all([
+  const [est, lista, loHecho, t0, t1, msg, yo, resto, cu, tareas, dado, g, regs, glo, pl, his] = await Promise.all([
     read($, estado), read($, pasos), read($, hecho), read($, inicio), read($, fin), read($, aviso),
     read($, ficha), read($, otras), read($, cuota), read($, marcha), read($, entregas), read($, gasto), read($, registros),
-    read($, global), read($, plan),
+    read($, global), read($, plan), read($, historico),
   ])
   const [pe, ab, rs, el, fi, ts, tp, ec, md, vi, mv, mt, cm, dm, un, cf] = await Promise.all([
     read($, pestana), read($, abiertos), read($, repoSel), read($, elegida), read($, filtro), read($, tocaSel),
@@ -1033,7 +1201,7 @@ async function datos($: any, cols: number, surface = 'desktop'): Promise<Datos> 
   }
   return {
     ahora: await $.clock.now(), cols, surface, yo, otras: resto, est, pasos: lista, t0, t1, hecho: loHecho, entregas: dado,
-    gasto: g, marcha: tareas, cuota: cu, global: glo, registros: regs, plan: pl, aviso: msg, ui,
+    gasto: g, marcha: tareas, cuota: cu, global: glo, registros: regs, historico: his, plan: pl, aviso: msg, ui,
   }
 }
 
@@ -1041,6 +1209,8 @@ export const register: Register = (on, opciones) => {
   // lo elegido al instalar (qué sesiones van juntas y qué frenos): un cambio en /config vuelve a cargar el mod
   leeAjustes(opciones)
   on('session.start', async ($, e, next) => {
+    // antes de leer nada, lo de la carpeta de antes, si aún no se ha copiado (fichas.ts)
+    await migra($)
     const id = await $.session.id()
     const ahora = await $.clock.now()
     let r = await read($, ficha)
@@ -1059,7 +1229,7 @@ export const register: Register = (on, opciones) => {
         }
       }
     }
-    const lista: Ficha = { ...r, latido: ahora, cerrada: false, v: 2, recarga: true }
+    const lista: Ficha = { ...r, latido: ahora, cerrada: false, v: 2, recarga: true, parar: true }
     await update($, ficha, () => lista)
     await guarda($, lista)
     try {
@@ -1075,6 +1245,7 @@ export const register: Register = (on, opciones) => {
     void leeRegistros($).then(l => update($, registros, () => l))
     void llevaCuota($)
     void alDiaSesion($, true)
+    void alDiaHistorico($)
     await $.tool.register({ name: 'progreso', description: DESCRIPCION, inputSchema: ESQUEMA })
     await $.command.register({ name: 'marty', description: 'Abre el panel «D-137», en esta sesión' })
     await $.command.register({ name: 'd-137', description: 'Abre el panel «D-137», en todas las sesiones' })
@@ -1083,6 +1254,7 @@ export const register: Register = (on, opciones) => {
       description: 'Cambia el rótulo de esta sesión en los paneles (sin texto, vuelve a su nombre)',
       argumentHint: '[texto]',
     })
+    await $.command.register({ name: 'historico', description: 'Informe por meses de todas las sesiones, también de las cerradas y las borradas' })
     void $.ui.open({ id: PANE, title: 'D-137' })
     let latidos = 0
     $.clock.every(LATIDO, () => {
@@ -1101,6 +1273,8 @@ export const register: Register = (on, opciones) => {
           await update($, registros, () => l)
           await llevaCuota($)
           await alDiaSesion($)
+          await alDiaHistorico($)
+          void importaHistorico($)
         }
       })()
     })
@@ -1144,6 +1318,19 @@ export const register: Register = (on, opciones) => {
         ? `El rótulo de esta sesión dice ahora «${texto}».`
         : `El rótulo vuelve a salir del nombre de la sesión: «${ahora?.rotulo ?? ''}».`,
     }
+  })
+
+  // La primera vez hay que leer las sesiones que aún faltan, y eso sigue por su cuenta, fuera de la orden: el informe se
+  // abre al acabar
+  on('command.run', { command: 'historico' }, async $ => {
+    if (!(await porLeer($)).length) return { text: await informe($) }
+    $.clock.after(100, () => {
+      void importaHistorico($, true)
+        .then(() => informe($))
+        .catch(() => avisa($, 'No se pudo hacer el informe del histórico.'))
+    })
+
+    return { text: 'Estoy leyendo las sesiones que faltan en el histórico: el informe se abre solo en cuanto acabe.' }
   })
 
   // Los turnos de los subagentes también pasan por aquí (con su agentId): el estado, los pasos y el plan son del bucle
@@ -1252,6 +1439,22 @@ export const register: Register = (on, opciones) => {
         void pideRecarga($)
       })
       return { consumed: 'D-137: recarga del mod, pedida con «Mods» desde otra sesión' }
+    }
+    // ■ en el panel de otra sesión: se para aquí, sin pasarle nada a Claude, y solo se contesta si no se ha podido
+    if (e.agentId === undefined && o.kind === 'peer' && o.plugin === 'd-137' && cuerpo.startsWith(PARA)) {
+      const [id = '', quien = ''] = cuerpo.slice(PARA.length).split(/\s+/)
+      $.clock.after(100, () => {
+        void (async () => {
+          const que = (await read($, marcha)).find(t => t.id === id)?.que ?? id
+          const fallo = await paraTarea($, id)
+          if (fallo && quien) await $.session.send({ to: { sessionId: quien }, text: `${NO_PARA}«${que}»: ${fallo}` })
+        })().catch(() => undefined)
+      })
+      return { consumed: 'D-137: parar algo de esta sesión, pedido desde el panel de otra' }
+    }
+    if (e.agentId === undefined && o.kind === 'peer' && o.plugin === 'd-137' && cuerpo.startsWith(NO_PARA)) {
+      avisa($, cuerpo.replace('D-137 · n', 'N'))
+      return { consumed: 'D-137: la otra sesión no ha podido parar lo que se le pidió' }
     }
     const marca = cuerpo.startsWith(MARCA) ? MARCA : ''
     if (e.agentId === undefined && o.kind === 'peer' && o.plugin === 'd-137' && marca) {

@@ -1,8 +1,9 @@
-// Lo compartido entre sesiones, en %USERPROFILE%\.claude\coordinador: la ficha de cada sesión (<id>.json, que renueva
-// cada 3 s, el latido; la que lleva 20 s sin renovarla ya no cuenta), su registro del día (registro\<id>.json: lo que
-// gastó y lo que hizo, aunque se cierre) y la cuota de todas (cuota.json, que escribe una sola sesión). Las fichas de
-// los mods de antes se leen igual: lo que les falta sale vacío
-import type { CuotaGlobal, Ficha, Registro, Repo } from '../types'
+// Lo compartido entre sesiones, en %USERPROFILE%\.claude\d-137 (hasta el 3-nov, en .claude\coordinador): la ficha de
+// cada sesión (<id>.json, que renueva cada 3 s, el latido; la que lleva 20 s sin renovarla ya no cuenta), su registro del
+// día (registro\<id>.json: lo que gastó y lo que hizo, aunque se cierre), su histórico (historico\<id>.json: lo de cada
+// día, sin caducar y aunque se borre) y la cuota de todas (cuota.json, que escribe una sola sesión). Las fichas de los
+// mods de antes se leen igual: lo que les falta sale vacío
+import type { CuotaGlobal, Ficha, Historico, Registro, Repo } from '../types'
 import { porNombre } from './ajustes'
 
 // Los personajes que se reparten entre las sesiones (26-oct): los Martys y los de reserva, con su nombre. El de dos
@@ -50,7 +51,51 @@ export async function casa($: any): Promise<string> {
   return CASA
 }
 export async function carpeta($: any): Promise<string> {
-  return `${await casa($)}/coordinador`
+  return `${await casa($)}/d-137`
+}
+// La carpeta compartida se llamaba «coordinador» hasta el 3-nov (cada mod, con la suya y con su nombre). La primera
+// vez que arranca este código, lo de allí se copia aquí: las fichas y lo demás de la raíz, el registro y el histórico, que
+// no caduca. Lo que ya esté aquí no se pisa (otra sesión puede haber empezado a escribir), cada sesión lo hace antes de
+// leer nada, y una marca dice que ya está hecho. La de antes no se toca: se aparta cuando ya no la usa nadie
+const VIEJA = 'coordinador'
+export async function migra($: any): Promise<number> {
+  const nueva = await carpeta($)
+  try {
+    await $.fs.stat(`${nueva}/.migrado`)
+    return 0
+  } catch {
+    // aún no
+  }
+  const vieja = `${await casa($)}/${VIEJA}`
+  let n = 0
+  const copia = async (sub: string) => {
+    let lista: { name: string; kind: string }[] = []
+    try {
+      lista = await $.fs.list(`${vieja}${sub}`)
+    } catch {
+      return
+    }
+    for (const f of lista) {
+      if (f.kind === 'dir' && !sub && (f.name === 'registro' || f.name === 'historico')) await copia(`/${f.name}`)
+      if (f.kind !== 'file' || !/\.(json|html)$/.test(f.name)) continue
+      const destino = `${nueva}${sub}/${f.name}`
+      try {
+        await $.fs.stat(destino)
+        continue
+      } catch {
+        // no está: se copia
+      }
+      try {
+        await $.fs.write(destino, String(await $.fs.read(`${vieja}${sub}/${f.name}`)))
+        n += 1
+      } catch {
+        // uno a medio escribir: lo vuelve a escribir su sesión
+      }
+    }
+  }
+  await copia('')
+  await $.fs.write(`${nueva}/.migrado`, `Copiado de .claude\\${VIEJA}: ${n} archivos, el ${new Date(await $.clock.now()).toISOString()}\n`)
+  return n
 }
 
 function completa(r: Partial<Ficha> & { id: string; tag: string; latido: number }): Ficha {
@@ -128,6 +173,42 @@ export async function guardaRegistro($: any, r: Registro) {
   const dias = Object.keys(r.dias).sort().slice(-9)
   const limpio = { ...r, dias: Object.fromEntries(dias.map(d => [d, r.dias[d]])) }
   await $.fs.write(`${await carpeta($)}/registro/${r.id}.json`, JSON.stringify(limpio))
+}
+// Los históricos de todas las sesiones que ha habido. Se leen cada medio minuto y casi ninguno cambia: el que no, de lo ya
+// leído
+const HISTORICOS = new Map<string, { mtimeMs: number; h: Historico }>()
+export async function leeHistoricos($: any): Promise<Historico[]> {
+  const dir = `${await carpeta($)}/historico`
+  let lista: { name: string; kind: string; mtimeMs: number }[] = []
+  try {
+    lista = await $.fs.list(dir)
+  } catch {
+    return []
+  }
+  const out: Historico[] = []
+  for (const f of lista) {
+    if (f.kind !== 'file' || !f.name.endsWith('.json')) continue
+    const ya = HISTORICOS.get(f.name)
+    if (ya?.mtimeMs === f.mtimeMs) {
+      out.push(ya.h)
+      continue
+    }
+    try {
+      const h = JSON.parse(await $.fs.read(`${dir}/${f.name}`)) as Historico
+      if (h && typeof h.id === 'string' && h.dias) {
+        HISTORICOS.set(f.name, { mtimeMs: f.mtimeMs, h })
+        out.push(h)
+      }
+    } catch {
+      // uno a medio escribir: el de la última vez, para que la suma no baje hasta leerlo entero
+      if (ya) out.push(ya.h)
+    }
+  }
+  return out
+}
+export async function guardaHistorico($: any, h: Historico) {
+  HISTORICOS.delete(`${h.id}.json`)
+  await $.fs.write(`${await carpeta($)}/historico/${h.id}.json`, JSON.stringify(h))
 }
 export async function leeGlobal($: any): Promise<CuotaGlobal> {
   try {

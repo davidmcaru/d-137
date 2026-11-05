@@ -67,6 +67,8 @@ export type Ficha = {
   contexto?: number
   // su mod entiende la recarga que manda «Mods» desde otra sesión (desde el 28-oct)
   recarga?: boolean
+  // su mod guarda lo suyo en el histórico y entiende que otra sesión le pida parar algo (desde el 1-nov)
+  parar?: boolean
 }
 export type Ventana = { pct: number; renueva?: string; resetsAt?: string }
 export type Cuota = { semana?: Ventana; horas?: Ventana }
@@ -93,9 +95,9 @@ export type ResumenSesion = {
   // con la recomendada, cuántas con lo tuyo («Otra») y cuántas desde el panel
   preguntas?: { cuando: number[]; contestadas: number; rec: number; otra: number; panel: number }
 }
-// El registro de cada sesión (coordinador/registro/<id>.json): lo que gastó y lo que hizo cada día, aunque ya esté
-// cerrada; y lo de toda la sesión: los dólares ya apuntados (visto: lo que llevaba costado la sesión la última vez),
-// sus tokens (tok) y lo del bloque de Marty (sesion)
+// El registro de cada sesión (d-137/registro/<id>.json): lo que gastó y lo que hizo cada día, aunque ya esté
+// cerrada; y lo de toda la sesión: los dólares ya apuntados (visto: lo que llevaba costado la sesión la última vez; alto:
+// hasta dónde había llegado, si ha bajado), sus tokens (tok) y lo del bloque de Marty (sesion)
 export type Registro = {
   id: string
   tag: string
@@ -103,10 +105,36 @@ export type Registro = {
   nombre: string
   dias: Record<string, DiaRegistro>
   visto?: number
+  alto?: number
   tok?: number
   sesion?: ResumenSesion
 }
-// La cuota de todas (coordinador/cuota.json), que escribe una sola sesión: el % de la semana al empezar y al acabar
+// Lo de un día de una sesión en el histórico: lo que costó (en dólares) y lo que pesa, sus tokens, lo que trabajó (en
+// ms), su rato más largo, el de más tokens y el que más pesa, y los archivos que tocó por primera vez
+export type DiaHistorico = {
+  usd: number; peso: number; tok: number; activa: number; maxT: number; maxTok: number; maxPeso: number; archivos: number
+}
+// El histórico de una sesión (d-137/historico/<id>.json; desde el 1-nov): lo de cada día, sin caducar y aunque la
+// sesión se borre; cuándo empezó y la última vez que se la vio, y hasta dónde se leyó su transcripción (leido, su fecha).
+// `sigue`, las sesiones de las que sigue: lo suyo ya va aquí, y no cuentan aparte
+export type Historico = {
+  id: string
+  nombre: string
+  inicio: number
+  fin: number
+  dias: Record<string, DiaHistorico>
+  leido?: number
+  sigue?: string[]
+}
+// Lo sumado de varias sesiones: todo el tiempo abiertas y el trabajado (ms), su coste, sus tokens y sus archivos, con el
+// rato más largo, el de más tokens y el que más costó; `estimado`, si algún coste sale de lo que pesa (historico.ts)
+export type Cuenta = {
+  abierta: number; activa: number; maxT: number; usd: number; maxUsd: number; tok: number; maxTok: number; archivos: number
+  estimado: boolean
+}
+// Lo de todas las sesiones que ha habido, para la ficha de Doc: cuántas son y desde cuándo
+export type TotalesHistorico = Cuenta & { n: number; desde: number }
+// La cuota de todas (d-137/cuota.json), que escribe una sola sesión: el % de la semana al empezar y al acabar
 // cada día, y lo gastado en cada hora
 export type CuotaGlobal = {
   ultimo?: { pct: number; cuando: number; resetsAt?: string }
@@ -136,6 +164,7 @@ declare module 'claude-code' {
       gasto: number | null
       registros: Registro[]
       global: CuotaGlobal
+      historico: TotalesHistorico | null
       pestana: Pestana
       abiertos: Record<string, boolean>
       repoSel: string | null

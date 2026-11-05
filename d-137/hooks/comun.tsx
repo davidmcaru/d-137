@@ -6,7 +6,7 @@
 import type { RenderElement } from 'claude-code'
 
 import type {
-  Cuota, CuotaGlobal, Decision, Entrega, Estado, Ficha, Mandada, Paso, Pestana, Registro, Tarea,
+  Cuota, CuotaGlobal, Decision, Entrega, Estado, Ficha, Mandada, Paso, Pestana, Registro, Tarea, TotalesHistorico,
 } from '../types'
 import { cuadritos, icono, marty as martyQuieto } from './dibujos'
 import { anchoTexto, boton, chip, esc, plegarK, separador, svgPulsable, T } from './kit'
@@ -52,6 +52,18 @@ export function mmss(ms: number): string {
 export const hm = (ms: number) => {
   const m = Math.floor(Math.max(0, ms) / 60000)
   return `${Math.floor(m / 60)}:${dos(m % 60)}${NB}h`
+}
+// El mes de un instante, para decirlo: «ago. 2026»
+const MESES = ['ene.', 'feb.', 'mar.', 'abr.', 'may.', 'jun.', 'jul.', 'ago.', 'sep.', 'oct.', 'nov.', 'dic.']
+export const mesDe = (ms: number) => {
+  const d = new Date(ms)
+  return `${MESES[d.getMonth()] ?? ''}${NB}${d.getFullYear()}`
+}
+// Este mes hasta hoy: «Del 1 al 3 de nov.» (el día 1, «1 de nov.»)
+export const delMes = (ms: number) => {
+  const d = new Date(ms)
+  const mes = MESES[d.getMonth()] ?? ''
+  return d.getDate() === 1 ? `1 de ${mes}` : `Del 1 al ${d.getDate()} de ${mes}`
 }
 // El tiempo de la etiqueta de cada estado, como en las maquetas: «Trabaja · 12:40 min», «Espera · 6 min», «Parada · 2:53 h»
 export function tiempoEstado(est: Est, ms: number): string {
@@ -128,6 +140,7 @@ export type Datos = {
   cuota: Cuota
   global: CuotaGlobal
   registros: Registro[]
+  historico: TotalesHistorico | null
   plan: string[]
   aviso: string
   ui: Ui
@@ -153,7 +166,7 @@ export type Acciones = {
   limpiaPasos: () => void
   limpiaAcabadas: (ids: string[]) => void
   verSalida: (t: Tarea) => void
-  para: (t: Tarea, seguro: boolean) => void
+  para: (t: Tarea, seguro: boolean, f?: Ficha) => void
   prueba: (texto: string) => void
 }
 export type El = any
@@ -325,21 +338,22 @@ export function bloque3x3(el: El, key: string, filas: CeldaFicha[][]): RenderEle
     </Box>
   )
 }
-// Lo de Sesión (la sesión, de sesion.ts) y Todas (todas, sumado): el tiempo, lo que habría costado por la API y los
-// tokens, en total, en el rato de trabajo más largo y por hora de trabajo; y lo de los archivos, que da cada ficha. El
-// orden, el que se eligió entre cinco: los tokens a la derecha, así su hueco (no tienen media) cae abajo y ahí van
-// los archivos
-export type Totales = { abierta?: number; activa?: number; maxT?: number; tok?: number; maxTok?: number; usd?: number; maxUsd?: number }
+// Lo de Sesión (la sesión, de sesion.ts) y Todas (todas las que ha habido, del histórico): el tiempo, lo que habría costado
+// por la API y los tokens, en total, en el rato de trabajo más largo y por hora de trabajo; y lo de los archivos, que da
+// cada ficha. El orden, el que se eligió entre cinco: los tokens a la derecha, así su hueco (no tienen media) cae
+// abajo y ahí van los archivos. `estimado`: parte del coste sale de lo que pesa (historico.ts), y sus cifras llevan «≈»
+export type Totales = { abierta?: number; activa?: number; maxT?: number; tok?: number; maxTok?: number; usd?: number; maxUsd?: number; estimado?: boolean }
 export const tiempoO = (ms?: number) => (typeof ms === 'number' ? hm(ms) : '—')
+export const casi = (estimado: boolean | undefined, s: string) => (estimado ? `≈${NB}${s}` : s)
 export function bloqueTotales(el: El, key: string, t: Totales, archivos: CeldaFicha): RenderElement {
   const horas = (t.activa ?? 0) / 3600000
   return bloque3x3(el, key, [
-    [{ etiqueta: 'Total', valor: tiempoO(t.abierta), color: T.t1 }, { etiqueta: 'Total', valor: dolares(t.usd), color: T.morado },
+    [{ etiqueta: 'Total', valor: tiempoO(t.abierta), color: T.t1 }, { etiqueta: 'Total', valor: casi(t.estimado, dolares(t.usd)), color: T.morado },
       { etiqueta: 'Total', valor: millones(t.tok), color: T.azul }],
-    [{ etiqueta: 'Máx', valor: tiempoO(t.maxT), color: T.t1 }, { etiqueta: 'Máx', valor: dolares(t.maxUsd), color: T.morado },
+    [{ etiqueta: 'Máx', valor: tiempoO(t.maxT), color: T.t1 }, { etiqueta: 'Máx', valor: casi(t.estimado, dolares(t.maxUsd)), color: T.morado },
       { etiqueta: 'Máx', valor: millones(t.maxTok), color: T.azul }],
     [{ etiqueta: 'Activa', valor: tiempoO(t.activa), color: T.t1 },
-      { etiqueta: 'Media', valor: typeof t.usd === 'number' && horas >= 1 / 60 ? `${cifra(t.usd / horas, 2)}${NB}$/h` : '—', color: T.morado },
+      { etiqueta: 'Media', valor: typeof t.usd === 'number' && horas >= 1 / 60 ? casi(t.estimado, `${cifra(t.usd / horas, 2)}${NB}$/h`) : '—', color: T.morado },
       archivos],
   ])
 }
