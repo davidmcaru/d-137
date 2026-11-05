@@ -21,7 +21,8 @@ entrada, y cada una se pliega con su botón, a la derecha.
   lleva gastado, los pasos y lo que ha gastado hoy de la cuota de la semana. El personaje con su «?» lleva a sus
   preguntas en Decisión, y con su «!», a Todas, donde se ve el bloqueo; arriba va el personaje, y debajo, el nombre entero
   de la sesión (si al instalarlo eliges juntar por el principio del nombre, arriba va además ese principio, el rótulo, y
-  debajo, el resto), con un botón pequeño delante que copia el enlace de la sesión; la carpeta de arriba a la derecha la abre en el
+  debajo, el resto), con dos botones pequeños delante: el que copia el enlace de la sesión y, a su derecha, el ojo, que
+  abre el selector de su personaje (más abajo, «El personaje de cada sesión»); la carpeta de arriba a la derecha la abre en el
   Explorador. Desplegada, bajo una raya, lo de toda la sesión en un bloque de 3 × 3: cuánto lleva abierta, cuánto ha
   trabajado y su rato de trabajo más largo; lo que habría costado por la API (en morado), lo de ese rato y lo que sale
   por hora de trabajo; sus tokens (en azul) y los del rato que más gastó; y lo que hay sin commit (en rojo) o, sin git,
@@ -118,8 +119,10 @@ defecto.
   su nombre, su rótulo, su estado, su paso, sus decisiones, lo que tiene en marcha, su gasto, los archivos que toca, su
   carpeta (rama, cambios sin commit y la raíz de su worktree principal, la misma en todos los worktrees del repo) y el
   enlace para abrirla en la app, y la renueva cada 3 s; la que lleva 20 s sin
-  renovarla sale de los paneles. Si dos sesiones arrancan a la vez con el mismo personaje, se lo queda la que llegó
-  antes.
+  renovarla sale de los paneles. Su personaje sale de lo guardado por su código (más abajo, «El personaje de cada
+  sesión»), y mientras no lo sabe, la ficha va sin personaje y no sale en los paneles. Cada cambio de la ficha parte de
+  la de ese momento, para que dos que llegan a la vez no se pisen. La sesión que una bloqueada espera va por su id
+  (`deId`), y en las fichas de antes, por su personaje.
 - **El registro del día** (`d-137/registro/<id>.json`): lo que costó y lo que acabó cada sesión cada día, aunque
   ya esté cerrada, también hora a hora (para cortar la semana a la hora en que se renueva) y con sus tokens. Los dólares
   se apuntan a medida que sube el coste de la sesión (cada 30 s y al acabar cada turno): así lo de los subagentes, que el
@@ -196,10 +199,34 @@ defecto.
   personaje de la sesión (`cabezaDe`), recortada de su dibujo de ficha, con el cuello de la camiseta, que deja ver su
   color (Marty y Azul solo se distinguen por ella). Doc cambia de cara según cómo van todas: una si hay algún bloqueo,
   otra si alguna espera una decisión, otra si están todas paradas y, si no, dos que se alternan cada medio minuto.
-- **El personaje de cada sesión**: al abrirla, uno libre al azar (siempre el mismo para la misma sesión, porque sale de
-  su id) entre los 25 que hay: los Martys (Marty D-137, Azul, Evil, Mutante, Xenomarty y Martinator), los de reserva
-  (Verano, Liz, Gerardo, Copito, Terror, Pompis, Mantequillo y Michi) y los disfrazados, dibujados sobre la cabeza y el
-  cuerpo de Marty (Poli, Vaquero, Pirata, Gecko, Cíclope, Tóxico, Mini Doc, Astronauta, Pepinillo, Pecas y Ronin).
+- **El personaje de cada sesión** (`hooks/reparto.ts`): uno de los 25 que hay: los Martys (Marty D-137, Azul, Evil,
+  Mutante, Xenomarty y Martinator), los de reserva (Verano, Liz, Gerardo, Copito, Terror, Pompis, Mantequillo y Michi)
+  y los disfrazados, dibujados sobre la cabeza y el cuerpo de Marty (Poli, Vaquero, Pirata, Gecko, Cíclope, Tóxico,
+  Mini Doc, Astronauta, Pepinillo, Pecas y Ronin).
+  - **Se guarda por su código** y se recuerda siempre: cada sesión apunta el suyo en `~/.claude/d-137/personajes/`,
+    un archivo por sesión que solo escribe ella, con el código de su enlace en la app (`local_…`, el de
+    `claude://claude.ai/epitaxy/…`), los ids con que se ha abierto y su nombre. La app vuelve a abrir una sesión con
+    otro id, y el código no cambia: la sesión es siempre el mismo personaje, también al día siguiente. Ahí se puede
+    ver qué personaje tiene cada sesión.
+  - **A una sesión nueva** le toca uno al azar entre los menos usados: primero entre los que no tiene ninguna sesión;
+    cuando ya los tienen todos, entre los que tienen uno, y así. Cuentan las sesiones que existen, también las
+    archivadas, según la lista de la propia app (`ccd_session_mgmt`, `list_sessions`); al borrar una, su personaje
+    queda libre. Fuera de la app (en la terminal), la clave es el id de la sesión, y cuentan las que aún tienen su
+    transcripción en el disco.
+  - **El código lo apunta la app** un momento después de arrancar la sesión, así que el mod lo espera; hasta entonces,
+    la ficha va sin personaje. Un proceso de reserva de la app (`spare`, en `~/.claude/spares`, que se convierte en la
+    sesión siguiente) no tiene código hasta que se usa: no apunta nada ni sale en los paneles.
+  - **El selector** (`hooks/selector.tsx`), con el ojo de la ficha, a la derecha del enlace de la sesión, que lo abre y
+    lo cierra y va con el borde cian mientras está abierto: los 25 en una rejilla de 5 × 5, cada uno con su dibujo de
+    ficha, quieto, su nombre y una bola con cuántas sesiones lo tienen; el de esta sesión, con el borde y el fondo cian
+    de lo elegido. Mientras se elige, bajo la ficha solo está el selector, y se cierra al elegir o al irse de la pestaña.
+    No impide elegir uno repetido, solo lo cuenta, y lo elegido se guarda como el de esta sesión. Cada dibujo va en un
+    trazado por color (`rects`, en `dibujos.ts`): con un rectángulo por tramo de píxeles, los 25 pesaban unos 660.000
+    caracteres y la app no pintaba el selector, sin avisar.
+  - **Las que ya existían** antes de esta versión se quedan con el que tenían: la primera vez que arranca, cada sesión
+    que existe se queda con el de su última ficha, por el código de su enlace (o por su nombre, si su ficha es de antes
+    de que lo llevara y en la app hay una sola que se llame así); una marca (`personajes/.migrado`) dice que ya está
+    hecho.
 - **El aspecto** (`hooks/kit.tsx`): el escritorio no deja poner CSS, así que lo que pinta a su manera se dibuja en SVG
   con los colores y las medidas de un CSS de referencia (`T`): los botones (con su icono; el principal, cian, y el de
   Decisión, azul), las pestañas con el dibujo de su ficha, las pastillas, las etiquetas de estado y de tipo, los filtros,

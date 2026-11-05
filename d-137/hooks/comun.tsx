@@ -6,7 +6,7 @@
 import type { RenderElement } from 'claude-code'
 
 import type {
-  Cuota, CuotaGlobal, Decision, Entrega, Estado, Ficha, Mandada, Paso, Pestana, Registro, Tarea, TotalesHistorico,
+  Cuota, CuotaGlobal, Decision, Entrega, Estado, Ficha, Mandada, Paso, Pestana, Registro, Reparto, Tarea, TotalesHistorico,
 } from '../types'
 import { cuadritos, icono, marty as martyQuieto } from './dibujos'
 import { anchoTexto, boton, chip, esc, plegarK, separador, svgPulsable, T } from './kit'
@@ -141,6 +141,7 @@ export type Datos = {
   global: CuotaGlobal
   registros: Registro[]
   historico: TotalesHistorico | null
+  reparto: Reparto | null
   plan: string[]
   aviso: string
   ui: Ui
@@ -168,6 +169,7 @@ export type Acciones = {
   verSalida: (t: Tarea) => void
   para: (t: Tarea, seguro: boolean, f?: Ficha) => void
   prueba: (texto: string) => void
+  eligePersonaje: (tag: string) => void
 }
 export type El = any
 

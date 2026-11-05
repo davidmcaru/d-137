@@ -148,7 +148,13 @@ Para ponerlo al día: `claude plugin update d-137@d-137` y `/reload-plugins`. Pa
   <img src="Capturas/personajes.webp" alt="Pantalla de recreativa con los 25 personajes: el selector pasa de uno a otro y enseña sus caras según trabaje, espere, esté bloqueado o parado" width="100%">
 </picture></p>
 
-Cada sesión lleva uno de los 25, el mismo mientras dure, con cuatro caras: trabajando, esperando, bloqueada y parada.
+Cada sesión lleva uno de los 25, con cuatro caras: trabajando, esperando, bloqueada y parada. Es siempre el mismo: se
+guarda por el código de la sesión en la app, también cuando la vuelves a abrir otro día. A una sesión nueva le toca uno
+de los que menos se usan, y con el ojo de su ficha, en la pestaña Sesión, eliges otro: el selector dice cuántas sesiones
+tiene cada uno, también las archivadas.
+
+<img src="Capturas/pestana-selector.png" alt="El selector de personaje: los 25 en una rejilla, cada uno con cuántas sesiones lo tienen y el de esta sesión marcado" width="580">
+
 Todos, con sus cuatro caras, en [`Dibujos/Personajes`](Dibujos/Personajes).
 
 ![Los 25 personajes de las sesiones, en fila, con su nombre](Capturas/desfile.svg)
@@ -214,8 +220,9 @@ Licencia [MIT](LICENSE).
 ## In English
 
 A Claude Code mod that adds a panel beside the chat with every session open on your PC: what each one is doing, which
-one needs you, what is still running and how much quota you have used. Each session is a pixel-art character. Windows
-only for now, and everything stays on your PC. The panel and this page are in Spanish.
+one needs you, what is still running and how much quota you have used. Each session is a pixel-art character, always
+the same one, and you can pick another from its tab. Windows only for now, and everything stays on your PC. The panel
+and this page are in Spanish.
 
 ```
 /plugin install d-137 --marketplace davidmcaru/d-137

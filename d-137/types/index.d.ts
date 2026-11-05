@@ -4,7 +4,9 @@ export type Paso = { id: string; texto: string; desde: number; hasta?: number; f
 // Una decisión para la persona; el contexto, una o dos frases para decidir sin ir a la sesión
 export type Decision = { titulo: string; opciones: string[]; recomendada: number; contexto?: string }
 export type Archivo = { ruta: string; desde: number }
-export type Espera = { ruta: string; de: string; desde?: number }
+// A quién espera una sesión bloqueada: su personaje (de) y, desde el 5-nov, su id (deId), porque dos sesiones pueden
+// tener el mismo personaje
+export type Espera = { ruta: string; de: string; deId?: string; desde?: number }
 // Lo que una sesión tiene en segundo plano: una orden (un render, un servidor) o un agente; con su última línea de
 // salida mientras corre, y cuándo y cómo acabó
 export type Tarea = {
@@ -141,6 +143,12 @@ export type CuotaGlobal = {
   dias: Record<string, { ini: number; fin: number; antes?: number }>
   horas: Record<string, number[]>
 }
+// El personaje de una sesión (d-137/personajes/<clave>.json; desde el 5-nov): la clave es el código de su enlace en la
+// app (local_…) o, fuera de ella, su id; desde cuándo lo tiene, los ids con que se ha abierto, si se eligió con el
+// selector (cuándo) y el nombre de la sesión
+export type Asignado = { clave: string; tag: string; desde: number; ids: string[]; elegido?: number; nombre?: string }
+// Cuántas sesiones de las que existen tienen cada personaje, para el selector, y cuándo se contó
+export type Reparto = { cuentas: Record<string, number>; cuando: number }
 export type Pestana = 'marty' | 'doc' | 'pajaro' | 'genio' | 'portales'
 // Lo que se mandó a una sesión desde Decisión, para enseñarlo atenuado
 export type Mandada = { texto: string; cuando: number; decisiones: Decision[]; elegidas: string[]; turno: number }
@@ -165,6 +173,7 @@ declare module 'claude-code' {
       registros: Registro[]
       global: CuotaGlobal
       historico: TotalesHistorico | null
+      reparto: Reparto | null
       pestana: Pestana
       abiertos: Record<string, boolean>
       repoSel: string | null

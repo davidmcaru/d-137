@@ -7,7 +7,7 @@ import type { CuotaGlobal, Ficha, Historico, Registro, Repo } from '../types'
 import { porNombre } from './ajustes'
 
 // Los personajes que se reparten entre las sesiones (26-oct): los Martys y los de reserva, con su nombre. El de dos
-// cabezas (M-06) y el afro (M-07) se quitaron del todo el 28-oct: la sesión que aún tenga uno coge otro libre (sana)
+// cabezas (M-06) y el afro (M-07) se quitaron del todo el 28-oct: la sesión que aún tenga uno coge otro (reparto.ts)
 export const TAGS = ['M-01', 'M-02', 'M-03', 'M-04', 'M-05', 'M-08', 'Verano', 'Liz', 'Gerardo', 'Copito', 'Terror', 'Pompis',
   'Mantequillo', 'Michi',
   // los nuevos de la iteración 7 de Diseno-Personajes que se eligieron el 28-oct
@@ -20,18 +20,9 @@ const NOMBRES: Record<string, string> = {
   Ciclope: 'Cíclope', Toxico: 'Tóxico', MiniDoc: 'Mini Doc',
 }
 export const nombreTag = (tag: string | undefined) => (tag ? NOMBRES[tag] ?? tag : '')
-// Uno libre al azar, siempre el mismo para la misma sesión (sale de su id): así no salen siempre los mismos en el mismo
-// orden, y una recarga no lo cambia
-export function eligeTag(id: string, usados: Set<string>): string | undefined {
-  const libres = TAGS.filter(t => !usados.has(t))
-  if (!libres.length) return undefined
-  let h = 0
-  for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0
-  return libres[h % libres.length]
-}
 const MUERTA = 20000
 const OLVIDA = 10 * 60 * 1000
-const NO_FICHAS = ['doc.json', 'cuota.json']
+export const NO_FICHAS = ['doc.json', 'cuota.json']
 
 export const nombreDe = (r: string) => r.split(/[\\/]/).filter(Boolean).pop() ?? r
 export const norm = (r: string) => r.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
@@ -228,9 +219,10 @@ export async function guardaGlobal($: any, g: CuotaGlobal) {
   }))
 }
 
-type DatosSesion = { name?: string; hostSessionId?: string }
+type DatosSesion = { name?: string; hostSessionId?: string; entrypoint?: string }
 // Lo que Claude Code apunta de la sesión en ~/.claude/sessions/<pid>.json (los .key de al lado no se abren): su nombre
-// en la app y su id en el escritorio, con el que se abre su enlace; si hay varios de la misma sesión, el más reciente
+// en la app, su id en el escritorio, con el que se abre su enlace, y desde dónde se abrió (claude-desktop, la app); si
+// hay varios de la misma sesión, el más reciente. La app lo escribe un momento después de arrancar la sesión
 export async function datosSesion($: any): Promise<DatosSesion> {
   const id = await $.session.id()
   const dir = `${await casa($)}/sessions`
@@ -242,7 +234,7 @@ export async function datosSesion($: any): Promise<DatosSesion> {
       try {
         const s = JSON.parse(await $.fs.read(`${dir}/${f.name}`)) as DatosSesion & { sessionId?: string }
         if (s.sessionId === id) {
-          out = { name: s.name?.trim() || undefined, hostSessionId: s.hostSessionId }
+          out = { name: s.name?.trim() || undefined, hostSessionId: s.hostSessionId, entrypoint: s.entrypoint }
           cuando = f.mtimeMs
         }
       } catch {
@@ -333,13 +325,6 @@ export function restoDe(f: Ficha): string {
 export const nombreCompleto = (f: Ficha) =>
   (porNombre() ? [`${nombreTag(f.tag)} ${f.rotulo}`, restoDe(f)] : [nombreTag(f.tag), f.nombre || f.rotulo]).filter(Boolean).join(' · ')
 
-// Dos sesiones que arrancan a la vez pueden quedarse con el mismo Marty: se lo queda la que llegó antes, y la otra coge
-// uno libre en el latido siguiente. Lo mismo la que tenga uno que ya no está entre los que se reparten
-export function sana(r: Ficha, todas: Ficha[]): Ficha {
-  const otras = todas.filter(x => x.id !== r.id)
-  const previas = otras.filter(x => x.desde < r.desde || (x.desde === r.desde && x.id < r.id))
-  if (TAGS.includes(r.tag) && !previas.some(x => x.tag === r.tag)) return r
-  const usados = new Set(otras.map(x => x.tag))
-  const tag = eligeTag(r.id, usados)
-  return tag ? { ...r, tag } : r
-}
+// La sesión a la que espera una bloqueada: por su id; las fichas de antes del 5-nov, por su personaje, que entonces no se
+// repetía entre las abiertas
+export const esperaA = (e: Ficha['espera'], f: Ficha) => !!e && (e.deId ? e.deId === f.id : e.de === f.tag)

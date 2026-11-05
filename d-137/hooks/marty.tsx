@@ -16,9 +16,10 @@ import { TIPOS, tareasDe } from './genio'
 import type { Tipo } from './genio'
 import { AJUSTES, porNombre } from './ajustes'
 import { fichaDe, marcaFicha, genioDe } from './dibujos'
-import { nombreDe, nombreTag, restoDe } from './fichas'
+import { esperaA, nombreDe, nombreTag, restoDe } from './fichas'
 import { tramoCascada } from './graficas'
 import { boton, estadoEt, grueso, leyenda, mezcla, separador, T, unaVez } from './kit'
+import { selectorPersonajes } from './selector'
 
 type Rel = { tipo: 'espero' | 'meespera' | 'pisamos' | 'trabaja' | 'espera' | 'parada'; chip: string; hex: string;
   titulo: string; frase: string; archivo?: string; desde?: number }
@@ -56,16 +57,16 @@ function rotuloDimension(f: Ficha): string {
 }
 // Si choca contigo, sea cual sea su tema: te bloquea, la bloqueas o tocáis el mismo archivo
 export const chocaCon = (yo: Ficha, f: Ficha, cambiados: string[]) =>
-  yo.espera?.de === f.tag || f.espera?.de === yo.tag || comunesDe(yo, f, cambiados).length > 0
+  esperaA(yo.espera, f) || esperaA(f.espera, yo) || comunesDe(yo, f, cambiados).length > 0
 
 export function relacion(yo: Ficha, f: Ficha, cambiados: string[]): Rel {
   const rojo = ESTADOS.bloqueada.hex
-  if (yo.espera && yo.espera.de === f.tag) {
+  if (yo.espera && esperaA(yo.espera, f)) {
     return { tipo: 'espero', chip: 'Bloqueo', hex: rojo, titulo: 'Lo esperas',
       frase: `${nombreTag(f.tag)} está escribiendo en ${nombreArchivo(yo.espera.ruta)}, y tú lo necesitas para seguir.`,
       archivo: yo.espera.ruta, desde: yo.espera.desde }
   }
-  if (f.espera && f.espera.de === yo.tag) {
+  if (f.espera && esperaA(f.espera, yo)) {
     return { tipo: 'meespera', chip: 'Bloqueo', hex: rojo, titulo: 'Te espera',
       frase: `${nombreTag(f.tag)} necesita ${nombreArchivo(f.espera.ruta)}, que estás tocando tú.`, archivo: f.espera.ruta,
       desde: f.espera.desde }
@@ -130,14 +131,16 @@ export function pestanaMarty(el: El, d: Datos, a: Acciones, cambiados: string[])
   const figura = figuraEn(el, fig, `${nombreTag(yo.tag)}, ${c.nombre}`, true)
   const irA = est === 'espera' ? () => { a.ui('tocaSel', yo.id); a.ui('tocaPaso', 0); a.ui('pestana', 'pajaro') }
     : est === 'bloqueada' ? () => { a.ui('elegida', yo.id); a.ui('pestana', 'doc') } : null
+  const eligiendo = d.ui.abiertos.selector === true
   const abiertoF = abiertoDe(d, 'fichaMarty')
   const cabeza = ficha(el, {
     key: 'ficha',
     dibujo: irA ? pulsable(el, 'ficha-ir', figura, tamFigura(fig).w, irA) : figura,
     marca: fig.propia ? null : marcaEn(el, 'ficha-marca', marcaFicha(est), c.nombre, est === 'parada'),
     // el recuadro, del color de su estado, como las casillas (azul trabaja, naranja espera, rojo bloqueada); parada, como
-    // siempre (26-oct)
-    marco: est === 'parada' ? undefined : { fondo: mezcla(c.hex, 0.2, T.marco), borde: c.hex },
+    // siempre (26-oct); con el selector abierto, del cian de lo elegido, como el selector
+    marco: eligiendo ? { fondo: mezcla(T.acento, 0.12, T.marco), borde: T.acento }
+      : est === 'parada' ? undefined : { fondo: mezcla(c.hex, 0.2, T.marco), borde: c.hex },
     // arriba, solo hasta el primer espacio del nombre de la sesión, y el resto debajo (28-oct); con la dimensión por repo
     // o por rama, solo el personaje, y el nombre entero debajo (29-oct)
     arriba: arriba(el, porNombre() ? `${nombreTag(yo.tag)} · ${yo.rotulo}` : nombreTag(yo.tag), c.nombre, c.texto),
@@ -148,9 +151,15 @@ export function pestanaMarty(el: El, d: Datos, a: Acciones, cambiados: string[])
         {plegar(el, 'fichaMarty', abiertoF, a)}
       </Box>
     ),
-    // y el que copia el enlace de la sesión, el mismo botón en pequeño, delante del nombre: arriba, junto a la carpeta,
-    // echaba fuera el de plegar (28-oct)
-    antesNombre: yo.enlace ? boton(el, 'ficha-enlace', { icono: 'enlace', alto: 18 }, () => a.copia(yo.enlace ?? '', d.surface)) : undefined,
+    // delante del nombre, el que copia el enlace de la sesión, el mismo botón en pequeño (arriba, junto a la carpeta,
+    // echaba fuera el de plegar; 28-oct), y a su derecha el ojo, que abre y cierra el selector de su personaje
+    // (selector.tsx; 5-nov: más intuitivo que pulsar el dibujo), con el borde cian mientras está abierto
+    antesNombre: (
+      <Box key="ficha-antes" flexDirection="row" alignItems="center" gap="xs">
+        {yo.enlace ? boton(el, 'ficha-enlace', { icono: 'enlace', alto: 18 }, () => a.copia(yo.enlace ?? '', d.surface)) : null}
+        {boton(el, 'ficha-ojo', { icono: 'ojo', alto: 18, tipo: eligiendo ? 'borde' : 'sec' }, () => a.alterna('selector'))}
+      </Box>
+    ),
     nombre: restoDe(yo) || (yo.nombre ? '' : 'Sin nombre todavía'),
     cols: d.cols,
     abajo: abiertoF ? bloqueSesion(el, d, yo) : undefined,
@@ -162,6 +171,8 @@ export function pestanaMarty(el: El, d: Datos, a: Acciones, cambiados: string[])
       { etiqueta: 'Gasto hoy', frac: Math.min(1, (d.gasto ?? 0) / (100 / 7)), valor: pct(d.gasto), color: AMARILLO },
     ],
   })
+  // mientras se elige, debajo de la ficha solo el selector
+  if (eligiendo) return [cabeza, selectorPersonajes(el, d, a)]
 
   // Los pasos de la tarea (MP10, con el plan de Claude): plegados, la barra de avance, un tramo por paso, y «Ahora:»;
   // desplegados, la cascada, con los que faltan en gris. «Limpiar» quita los hechos (26-oct)

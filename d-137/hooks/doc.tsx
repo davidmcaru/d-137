@@ -13,7 +13,7 @@ import {
 } from './comun'
 import { fichaDe, marca, marcaFicha, pixelado, docDe } from './dibujos'
 import type { CaraDoc } from './dibujos'
-import { nombreCompleto, nombreDe, nombreTag, restoDe } from './fichas'
+import { esperaA, nombreCompleto, nombreDe, nombreTag, restoDe } from './fichas'
 import { boton, chip, grueso, mezcla, numero, separador, T, unaVez } from './kit'
 
 const ORDEN: Est[] = ['trabaja', 'espera', 'bloqueada', 'parada']
@@ -166,7 +166,7 @@ export function pestanaDoc(el: El, d: Datos, a: Acciones): RenderElement[] {
     // su Marty, lo más grande que quepa en su recuadro, y la marca del estado encima, en la esquina (26-oct)
     const figEl = fichaDe(f.tag, est)
     const pasa = loQuePasa(f)
-    const dueno = f.espera ? todas.find(x => x.tag === f.espera?.de) : undefined
+    const dueno = f.espera ? todas.find(x => esperaA(f.espera, x)) : undefined
     // en una parada, «Sesión» para ir a ver qué hacía y cerrarla a mano si hace falta (26-oct: no proponer «Cerrar»)
     const conSesion = est === 'espera' || (est === 'bloqueada' && !!dueno)
     const principal: RenderElement[] = est === 'espera'
@@ -229,7 +229,7 @@ export function pestanaDoc(el: El, d: Datos, a: Acciones): RenderElement[] {
 
   // El bloqueo, por fuera: quién espera a quién, por qué archivo y desde hace cuánto
   const bloqueos = todas.filter(f => f.espera).map(f => {
-    const dueno = todas.find(x => x.tag === f.espera?.de)
+    const dueno = todas.find(x => esperaA(f.espera, x))
     const clave = `bloqueo-${f.id}`
     const abierto = d.ui.abiertos[clave] === true
     const rojo = ESTADOS.bloqueada
@@ -293,7 +293,7 @@ export function pestanaDoc(el: El, d: Datos, a: Acciones): RenderElement[] {
     for (const f of lista) {
       num += 1
       const t = tiempoEstado(est, d.ahora - desdeDe(f))
-      const dueno = f.espera ? todas.find(x => x.tag === f.espera?.de) : undefined
+      const dueno = f.espera ? todas.find(x => esperaA(f.espera, x)) : undefined
       const [cita, debajo, accion] = est === 'bloqueada'
         ? [`«Necesito el ${nombreDe(f.espera?.ruta ?? '')} de ${nombreTag(f.espera?.de)}»`, `${f.rotulo} · ${nombreDe(f.espera?.ruta ?? '')} · ${t}`,
           dueno ? boton(el, `nt-b-${f.id}`, { texto: 'Avisar', tipo: 'pri' }, () => a.avisa(dueno, mensajeBloqueo(f))) : null]

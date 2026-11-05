@@ -10,7 +10,8 @@ import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 
 import type {
-  Cuota, CuotaGlobal, Decision, Entrega, Estado, Ficha, Historico, Mandada, Paso, Pestana, Registro, Tarea, TotalesHistorico,
+  Asignado, Cuota, CuotaGlobal, Decision, Entrega, Estado, Ficha, Historico, Mandada, Paso, Pestana, Registro, Reparto, Tarea,
+  TotalesHistorico,
 } from '../types'
 import { AJUSTES, leeAjustes } from './ajustes'
 import { ANALIZAR, ANALIZAR_PRO, PANEL } from './atajos'
@@ -19,11 +20,14 @@ import type { Acciones, Datos } from './comun'
 import { decisionesDe, DESPLEGADOS, letra, sinToque, TOQUES, vistaPasos } from './comun'
 import {
   carpeta, casa, datosSesion, diaDe, enlaceDe, guarda, guardaGlobal, guardaHistorico, guardaRegistro, idsEscritorio, leeGlobal,
-  leeHistoricos, leeRegistros, leeTodas, eligeTag, migra, nombreDe, nombreTag, norm, repoDe, rotuloDe, sana, TAGS,
+  leeHistoricos, leeRegistros, leeTodas, migra, nombreDe, nombreTag, norm, repoDe, rotuloDe, TAGS,
 } from './fichas'
 import { esteMes, historicoDe, mesesDe, totalesDe } from './historico'
 import { informeHtml, informeTexto } from './informe'
 import { pendientesDe, respuestaDe } from './pajaro'
+import {
+  guardaAsignado, idsEnDisco, leeAsignado, leeAsignados, menosUsado, migraReparto, repartoDe, sesionesDeLaApp,
+} from './reparto'
 import { COMMIT, franja, MAS, panel } from './panel'
 import { analiza, anterioresDe, resumenDe, tocados } from './sesion'
 import type { Analisis } from './sesion'
@@ -70,6 +74,8 @@ const registros = atom({ plugin: 'd-137', key: 'registros' } as const, [] as Reg
 const global = atom({ plugin: 'd-137', key: 'global' } as const, { dias: {}, horas: {} } as CuotaGlobal)
 // Lo de todas las sesiones que ha habido, ya sumado, para la ficha de Doc
 const historico = atom({ plugin: 'd-137', key: 'historico' } as const, null as TotalesHistorico | null)
+// Cuántas sesiones tienen cada personaje (reparto.ts), para el selector
+const reparto = atom({ plugin: 'd-137', key: 'reparto' } as const, null as Reparto | null)
 // Lo de la vista: la pestaña, lo desplegado, lo pulsado y lo elegido en Decisión (por defecto, todo plegado)
 const pestana = atom({ plugin: 'd-137', key: 'pestana' } as const, 'marty' as Pestana)
 const abiertos = atom({ plugin: 'd-137', key: 'abiertos' } as const, {} as Record<string, boolean>)
@@ -213,12 +219,12 @@ let miRegistro: Registro | null = null
 let ultimaLectura = ''
 let cuandoLectura = 0
 
+// Cada cambio, sobre la ficha de ese momento: varios llegan a la vez (el personaje, la carpeta, la cuota), y uno leído
+// antes de que otro la cambiara lo pisaba (se vio el 5-nov: la carpeta se perdía al apuntar el personaje)
 async function cambiaFicha($: any, fn: (f: Ficha) => Ficha) {
-  const f = await read($, ficha)
-  if (!f) return
-  const nueva = fn(f)
-  await update($, ficha, () => nueva)
-  await guarda($, nueva)
+  let nueva: Ficha | null = null
+  await update($, ficha, f => (f ? (nueva = fn(f)) : f))
+  if (nueva) await guarda($, nueva)
 }
 // Las decisiones contestadas, fuera de aquí y de la ficha: los paneles de todas las sesiones dejan de verlas en el
 // latido siguiente
@@ -242,22 +248,61 @@ async function alDiaRepo($: any) {
   cambiados = r.cambiados
   await cambiaFicha($, f => (JSON.stringify(f.repo) === JSON.stringify(r.repo) ? f : { ...f, repo: r.repo }))
 }
+// El personaje de esta sesión (reparto.ts): el que tiene guardado por su código o, si es nueva, uno de los menos usados.
+// La app apunta el código de la sesión un momento después de arrancarla (se vio el 5-nov: 1,3 s después), y un proceso de
+// reserva de la app (spare, en ~/.claude/spares) no lo tiene hasta que se usa, y entonces arranca otra vez con otro id:
+// mientras, la ficha va sin personaje y no sale en los paneles. Fuera de la app, la clave es su id
+let claveSesion: string | null = null
+const ESPERA_CLAVE = 500
+const INTENTOS_CLAVE = 40
+function asigna($: any, id: string, intento = 0) {
+  void (async () => {
+    if ((await $.session.id()) !== id) return
+    // la primera vez, las sesiones que ya existen se quedan con el que tenían
+    if (intento === 0) await migraReparto($, () => sesionesDeLaApp($)).catch(() => 0)
+    const s = await datosSesion($)
+    const enApp = !s.entrypoint || s.entrypoint === 'claude-desktop'
+    if (!s.hostSessionId && enApp && intento < INTENTOS_CLAVE) {
+      $.clock.after(ESPERA_CLAVE, () => asigna($, id, intento + 1))
+      return
+    }
+    if (!s.hostSessionId && /\/\.claude\/spares\//.test(`${norm(String(await $.session.cwd()))}/`)) return
+    const clave = s.hostSessionId ?? id
+    claveSesion = clave
+    let a: Asignado | null = await leeAsignado($, clave)
+    // uno que ya no se reparte (como el de dos cabezas), otro: con él, la sesión no saldría en los paneles
+    if (!a || !TAGS.includes(a.tag)) {
+      const r = await alDiaReparto($, clave)
+      a = { clave, tag: menosUsado(r.cuentas), desde: await $.clock.now(), ids: [...(a?.ids ?? []).filter(x => x !== id), id].slice(-30),
+        ...(s.name ? { nombre: s.name } : {}) }
+      await guardaAsignado($, a)
+    } else if (!a.ids.includes(id) || (s.name && a.nombre !== s.name)) {
+      a = { ...a, ids: [...a.ids.filter(x => x !== id), id].slice(-30), ...(s.name ? { nombre: s.name } : {}) }
+      await guardaAsignado($, a)
+    }
+    const tag = a.tag
+    await cambiaFicha($, f => (f.id === id && f.tag !== tag ? { ...f, tag } : f))
+    await refresca($)
+    await alDiaReparto($)
+  })().catch(() => undefined)
+}
+// Cuántas sesiones tienen cada personaje: las de la app, también las archivadas, o, sin ella, las que siguen en el disco
+async function alDiaReparto($: any, clave = claveSesion): Promise<Reparto> {
+  const app = await sesionesDeLaApp($)
+  const enDisco = app ? undefined : await idsEnDisco($, await casa($))
+  const r = repartoDe(await leeAsignados($), { app, enDisco, yo: clave ?? undefined, ahora: await $.clock.now() })
+  await update($, reparto, () => r)
+  return r
+}
 function avisa($: any, texto: string) {
   Promise.resolve()
     .then(() => $.ui.toast(texto))
     .catch(() => undefined)
 }
 async function refresca($: any) {
-  let todas = await leeTodas($)
+  const todas = await leeTodas($)
   const yo = await read($, ficha)
-  if (yo) {
-    const sano = sana(yo, todas)
-    if (sano !== yo) {
-      await update($, ficha, () => sano)
-      await guarda($, sano)
-      todas = todas.map(x => (x.id === sano.id ? sano : x))
-    }
-  }
+  // sin personaje todavía (la que aún no sabe su código, un proceso de reserva de la app), no sale
   const resto = todas.filter(x => x.id !== yo?.id && TAGS.includes(x.tag))
     .map(x => (x.enlace || !ESCRITORIO.has(x.id) ? x : { ...x, enlace: enlaceDeFicha(x) }))
   await update($, otras, () => resto)
@@ -748,7 +793,7 @@ async function frena($: any, x: { file_path?: string; notebook_path?: string }):
   }
   if (!r.espera || norm(r.espera.ruta) !== ruta) {
     const original = String(x.file_path ?? x.notebook_path ?? ruta)
-    await cambiaFicha($, y => ({ ...y, espera: { ruta: original, de: otro.tag, desde: ahora } }))
+    await cambiaFicha($, y => ({ ...y, espera: { ruta: original, de: otro.tag, deId: otro.id, desde: ahora } }))
     await refresca($)
     try {
       await $.session.send({
@@ -974,6 +1019,8 @@ function acciones($: any): Acciones {
       case 'pestana':
         void update($, pestana, () => v as Pestana)
         void update($, aviso, () => '')
+        // el selector de personaje (selector.tsx) se cierra al irse de la pestaña
+        void update($, abiertos, a => (a.selector ? { ...a, selector: false } : a))
         void apuntaPestana($, v as Pestana)
         break
       case 'abiertos': void update($, abiertos, () => v as Record<string, boolean>); break
@@ -1029,7 +1076,29 @@ function acciones($: any): Acciones {
     ui: (k, v) => pon(k, v),
     alterna: clave => {
       void update($, confirma, () => '')
-      void update($, abiertos, a => ({ ...a, [clave]: !(a[clave] ?? DESPLEGADOS.includes(clave)) }))
+      void (async () => {
+        await update($, abiertos, a => ({ ...a, [clave]: !(a[clave] ?? DESPLEGADOS.includes(clave)) }))
+        if (clave === 'selector' && (await read($, abiertos)).selector) await alDiaReparto($)
+      })()
+    },
+    // El personaje que se elige en el selector (selector.tsx): se guarda como el de esta sesión, aunque lo tenga otra
+    // (5-nov: el selector no lo impide, solo lo cuenta)
+    eligePersonaje: tag => {
+      void (async () => {
+        const yo = await read($, ficha)
+        if (!yo || !TAGS.includes(tag)) return
+        if (!claveSesion) {
+          avisa($, 'Aún no sé el código de esta sesión: vuelve a probar en un momento.')
+          return
+        }
+        const ahora = await $.clock.now()
+        const a = (await leeAsignado($, claveSesion)) ?? { clave: claveSesion, tag, desde: ahora, ids: [yo.id] }
+        await guardaAsignado($, { ...a, tag, desde: a.tag === tag ? a.desde : ahora, elegido: ahora, ...(yo.nombre ? { nombre: yo.nombre } : {}) })
+        await update($, abiertos, ab => ({ ...ab, selector: false }))
+        await cambiaFicha($, f => ({ ...f, tag }))
+        await update($, aviso, () => `Esta sesión es ahora ${nombreTag(tag)}.`)
+        await alDiaReparto($)
+      })()
     },
     copia: (texto, surface) => {
       void copia($, texto, surface)
@@ -1184,10 +1253,10 @@ function acciones($: any): Acciones {
 }
 
 async function datos($: any, cols: number, surface = 'desktop'): Promise<Datos> {
-  const [est, lista, loHecho, t0, t1, msg, yo, resto, cu, tareas, dado, g, regs, glo, pl, his] = await Promise.all([
+  const [est, lista, loHecho, t0, t1, msg, yo, resto, cu, tareas, dado, g, regs, glo, pl, his, rep] = await Promise.all([
     read($, estado), read($, pasos), read($, hecho), read($, inicio), read($, fin), read($, aviso),
     read($, ficha), read($, otras), read($, cuota), read($, marcha), read($, entregas), read($, gasto), read($, registros),
-    read($, global), read($, plan), read($, historico),
+    read($, global), read($, plan), read($, historico), read($, reparto),
   ])
   const [pe, ab, rs, el, fi, ts, tp, ec, md, vi, mv, mt, cm, dm, un, cf] = await Promise.all([
     read($, pestana), read($, abiertos), read($, repoSel), read($, elegida), read($, filtro), read($, tocaSel),
@@ -1201,7 +1270,7 @@ async function datos($: any, cols: number, surface = 'desktop'): Promise<Datos> 
   }
   return {
     ahora: await $.clock.now(), cols, surface, yo, otras: resto, est, pasos: lista, t0, t1, hecho: loHecho, entregas: dado,
-    gasto: g, marcha: tareas, cuota: cu, global: glo, registros: regs, historico: his, plan: pl, aviso: msg, ui,
+    gasto: g, marcha: tareas, cuota: cu, global: glo, registros: regs, historico: his, reparto: rep, plan: pl, aviso: msg, ui,
   }
 }
 
@@ -1219,12 +1288,12 @@ export const register: Register = (on, opciones) => {
       const mia = todas.find(x => x.id === id)
       if (mia) r = mia
       else {
-        const usados = new Set(todas.map(x => x.tag))
         const s = await datosSesion($)
         const nombre = s.name ?? ''
         const rotulo = rotuloDe(nombre, nombreDe(await $.session.root()))
+        // sin personaje hasta saber el código de la sesión (asigna)
         r = {
-          id, tag: eligeTag(id, usados) ?? 'M-08', nombre, rotulo, desde: ahora, latido: ahora,
+          id, tag: '', nombre, rotulo, desde: ahora, latido: ahora,
           estado: 'esperando', turno: 0, paso: '', toca: [], archivos: [], espera: null,
         }
       }
@@ -1232,6 +1301,9 @@ export const register: Register = (on, opciones) => {
     const lista: Ficha = { ...r, latido: ahora, cerrada: false, v: 2, recarga: true, parar: true }
     await update($, ficha, () => lista)
     await guarda($, lista)
+    // la clave de la sesión de antes (un /clear, un proceso de reserva que se usa) ya no vale: lo elegido no iría a ella
+    claveSesion = null
+    asigna($, id)
     try {
       miRegistro = JSON.parse(await $.fs.read(`${await carpeta($)}/registro/${id}.json`)) as Registro
     } catch {
@@ -1275,6 +1347,7 @@ export const register: Register = (on, opciones) => {
           await alDiaSesion($)
           await alDiaHistorico($)
           void importaHistorico($)
+          if ((await read($, abiertos)).selector) void alDiaReparto($)
         }
       })()
     })

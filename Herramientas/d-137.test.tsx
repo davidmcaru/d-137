@@ -8,8 +8,9 @@ import { expect, mock, test } from 'claude-code/testing'
 import { leeAjustes } from './hooks/ajustes'
 import { gastadoDesde, horasDe, porSesion, ventanaSemana } from './hooks/calculos'
 import { dolares, letra, millones } from './hooks/comun'
-import { cabezaDe, spriteDe } from './hooks/dibujos'
-import { nombreTag, restoDe, rotuloDe, sana, TAGS } from './hooks/fichas'
+import { cabezaDe, marty, spriteDe } from './hooks/dibujos'
+import { esperaA, nombreTag, restoDe, rotuloDe, TAGS } from './hooks/fichas'
+import { menosUsado, repartoDe } from './hooks/reparto'
 import { esteMes, historicoDe, mesesDe, totalesDe } from './hooks/historico'
 import { informeHtml } from './hooks/informe'
 import { analiza, anterioresDe, rutasDe } from './hooks/sesion'
@@ -235,7 +236,20 @@ test('D-137: fichas, frenos, Activo, Decisión, Cuota, panel y franja', async ($
     contextos.push((e.context ?? []).join('\n'))
     return { text: e.text } as any
   })
-  on('mcp.call', () => ({ value: { content: [{ type: 'text', text: 'archivada' }], isError: false } }) as any)
+  // la lista de la app (ccd_session_mgmt): las sesiones que existen, también las archivadas; la borrada ya no está
+  const APP = [
+    { sessionId: 'local_agenda', title: 'Agenda - Agenda del año', isArchived: false },
+    { sessionId: 'local_web', title: 'Web - Revisión de textos', isArchived: false },
+    { sessionId: 'local_datos', title: 'Datos - Informes', isArchived: false },
+    { sessionId: 'local_muerta', title: 'X - Muerta', isArchived: true },
+    { sessionId: 'local_archivada', title: 'Vieja archivada', isArchived: true },
+  ]
+  on('mcp.call', (_, e: any) => ({ value: e.tool === 'list_sessions'
+    ? { content: [{ type: 'text', text: JSON.stringify(APP) }], isError: false }
+    : { content: [{ type: 'text', text: 'archivada' }], isError: false } }) as any)
+  // el personaje de una sesión archivada (Terror) y el de una borrada (Verano), guardados por su código
+  pon(`${CASA}/d-137/personajes/local_archivada.json`, { clave: 'local_archivada', tag: 'Terror', desde: AHORA - 9e8, ids: ['arch-1'] })
+  pon(`${CASA}/d-137/personajes/local_borrada.json`, { clave: 'local_borrada', tag: 'Verano', desde: AHORA - 9e8, ids: ['borr-1'] })
   on('session.receive', (_, e: any) => ({ text: e.text }) as any)
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('turn.start', (_, e: any) => ({ turnId: e.turnId }) as any)
@@ -270,9 +284,17 @@ test('D-137: fichas, frenos, Activo, Decisión, Cuota, panel y franja', async ($
   expect(fs.has(`${CASA}/d-137/informe-historico.pdf`)).toBe(false)
   expect(fs.has(`${CASA}/coordinador/otra1.json`)).toBe(true)
   const mia = () => JSON.parse(fs.get(`${CASA}/d-137/yo-123.json`)?.text ?? '{}')
-  // un personaje libre, al azar: ni el de otra sesión viva (Liz, M-03, M-05, M-01) ni los que se quitaron (M-06, M-07)
-  const LIBRES = TAGS.filter(t => !['Liz', 'M-03', 'M-05', 'M-01'].includes(t))
+  // su personaje, guardado por su código (5-nov): uno al azar de los que no tiene ninguna de las sesiones que
+  // existen, también las archivadas (Terror); el de la borrada (Verano) queda libre. Las que ya existían se quedan con el
+  // suyo: el de su última ficha, por su enlace, o por su nombre si no lo lleva (X - Muerta, Mantequillo); la vieja, sin enlace ni
+  // nombre, no se apunta
+  const asignado = (clave: string) => JSON.parse(fs.get(`${CASA}/d-137/personajes/${clave}.json`)?.text ?? '{}')
+  expect(['local_agenda', 'local_web', 'local_datos', 'local_muerta', 'local_archivada'].map(c => asignado(c).tag)).toEqual(['Liz', 'M-03', 'M-05', 'Mantequillo', 'Terror'])
+  expect(asignado('local_agenda').ids).toEqual(['otra1'])
+  expect(fs.has(`${CASA}/d-137/personajes/.migrado`)).toBe(true)
+  const LIBRES = TAGS.filter(t => !['Liz', 'M-03', 'M-05', 'Mantequillo', 'Terror'].includes(t))
   expect(LIBRES).toContain(mia().tag)
+  expect(asignado('local_yo')).toMatchObject({ clave: 'local_yo', tag: mia().tag, ids: ['yo-123'], nombre: 'Web - Portada nueva' })
   // lo que viene marcado al instalar: juntas, las del mismo repo, y el rótulo, el nombre entero (29-oct)
   expect(mia().rotulo).toBe('Web - Portada nueva')
   expect(mia().v).toBe(2)
@@ -376,6 +398,50 @@ test('D-137: fichas, frenos, Activo, Decisión, Cuota, panel y franja', async ($
   const dentro = (svg: string) => JSON.stringify(svg.replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '')).slice(1, -1)
   expect(JSON.stringify(await ui.drawn())).toContain(dentro(cabezaDe(mia().tag).svg))
   expect(JSON.stringify(await ui.drawn())).toContain(`"alt":"Sesión"`)
+  // el ojo de la ficha, a la derecha del enlace, abre el selector de su personaje (5-nov; la rejilla de fichas): los 25,
+  // cada uno con cuántas sesiones lo tienen, también las archivadas (Terror) y esta; la borrada no cuenta (Verano)
+  await ui.press({ key: 'ficha-ojo' })
+  await reloj.settle()
+  // (a esta le puede tocar el de la borrada: entonces lo tiene una)
+  const libre = (tag: string) => new RegExp(`${nombreTag(tag)}: ${mia().tag === tag ? '1 sesión' : '0 sesiones'}`)
+  await tiene(/Personaje de esta sesión/, /Liz: 1 sesión/, /Terror: 1 sesión/, /Mantequillo: 1 sesión/, libre('Verano'),
+    new RegExp(`${nombreTag(mia().tag)}: 1 sesión`), libre('Ronin'))
+  expect((await textos()).match(/: \d+ sesi(ón|ones)/g)?.length).toBe(25)
+  // mientras se elige, debajo de la ficha solo el selector
+  expect(await textos()).not.toMatch(/Pasos de la tarea/)
+  // elegir uno que ya tiene otra (Liz, la de Agenda) se puede: se guarda por su código, el selector se cierra y la cuenta sube
+  await ui.press({ key: 'sel-Liz' })
+  await reloj.settle()
+  expect(mia().tag).toBe('Liz')
+  expect(asignado('local_yo').tag).toBe('Liz')
+  expect(asignado('local_yo').elegido).toBeGreaterThan(0)
+  expect(await textos()).not.toMatch(/Personaje de esta sesión/)
+  await tiene(/Pasos de la tarea/, /Esta sesión es ahora Liz/)
+  // el ojo lo vuelve a abrir, con Liz en dos sesiones; y se elige Mutante, que está libre (así lo que se pinta después es
+  // siempre igual); la «x» lo cierra
+  await ui.press({ key: 'ficha-ojo' })
+  await reloj.settle()
+  await tiene(/Personaje de esta sesión/, /Liz: 2 sesiones/)
+  await ui.press({ key: 'sel-M-04' })
+  await reloj.settle()
+  expect([mia().tag, asignado('local_yo').tag]).toEqual(['M-04', 'M-04'])
+  await ui.press({ key: 'ficha-ojo' })
+  await reloj.settle()
+  await tiene(/Liz: 1 sesión/, /Mutante: 1 sesión/)
+  await vuelca('marty-selector')
+  await ui.press({ key: 'sel-cerrar' })
+  await reloj.settle()
+  expect(await textos()).not.toMatch(/Personaje de esta sesión/)
+  // el ojo también lo cierra; y el aviso de lo elegido se va al cambiar de pestaña
+  await ui.press({ key: 'ficha-ojo' })
+  await reloj.settle()
+  await tiene(/Personaje de esta sesión/)
+  await ui.press({ key: 'ficha-ojo' })
+  await reloj.settle()
+  expect(await textos()).not.toMatch(/Personaje de esta sesión/)
+  await ui.press({ key: 'tab-doc' })
+  await ui.press({ key: 'tab-marty' })
+  expect(await textos()).not.toMatch(/Esta sesión es ahora/)
   // la ficha desplegada (28-oct): bajo una raya, el bloque de 3 × 3 de toda la sesión: abierta desde esta mañana (3 h),
   // 1:55 h trabajando y 0:58 h la más larga; 4,30 M tokens y 2,00 M en su rato que más gastó; 2 $, 1,04 $ por hora de
   // trabajo y 0,90 $ el rato que más pesa; y, con git, lo que hay sin commit
@@ -458,6 +524,10 @@ test('D-137: fichas, frenos, Activo, Decisión, Cuota, panel y franja', async ($
 
   await ui.press({ key: 'tab-doc' })
   await tiene(/Doc/, /Sesiones · 5/, /Lo que necesita de ti/, /Bloqueo/)
+  // Doc enseña el personaje de cada sesión, el guardado por su código (5-nov): Liz, la de Agenda; M-03, M-05 y el de
+  // esta, Mutante, el elegido en el selector
+  const arbolDoc = JSON.stringify(await ui.drawn())
+  for (const tag of ['Liz', 'M-03', 'M-05', 'M-04']) expect(arbolDoc).toContain(dentro(marty(tag)))
   // con su ficha desplegada, el bloque de todas las de este mes, del día 1 a hoy (3-nov): de momento, esta, que guarda
   // lo suyo y trae lo de la sesión de la que sigue
   await tiene(/Del 1 al 15 de nov\. · 1 sesión/, /Activa[ |]*1:55\u00a0h/, /4,30\u00a0M/, /2,00\u00a0\$/, /Archivos[ |]*6/)
@@ -790,13 +860,27 @@ test('La cabeza de cada personaje y las filas de «Cuándo lo usas»', async () 
   // uno que no se sabe quién es (o uno de los quitados), la del Marty
   expect(cabezaDe(undefined).svg).toBe(cabezaDe('M-01').svg)
   expect(cabezaDe('M-06').svg).toBe(cabezaDe('M-01').svg)
-  // el de dos cabezas y el afro ya no se reparten: la sesión que aún tenga uno coge otro libre (28-oct)
-  const vieja = { id: 'vieja', tag: 'M-06', nombre: '', rotulo: '', desde: 1, latido: 1, estado: 'esperando' as const, turno: 0,
-    paso: '', toca: [], archivos: [], espera: null }
-  expect(TAGS).toContain(sana(vieja, []).tag)
-  expect(sana({ ...vieja, tag: 'M-07' }, []).tag).not.toBe('M-07')
-  const verano = { ...vieja, tag: 'Verano' }
-  expect(sana(verano, [])).toBe(verano)
+  // a una sesión nueva le toca uno al azar entre los menos usados (5-nov): primero los que no tiene ninguna; cuando
+  // ya los tienen todos, los que tienen uno, y así. El de dos cabezas y el afro (M-06, M-07) ya no se reparten
+  const todos = (n: number) => Object.fromEntries(TAGS.map(t => [t, n]))
+  expect(menosUsado({ ...todos(1), Terror: 0 })).toBe('Terror')
+  expect(menosUsado({ ...todos(2), Gerardo: 1, Ronin: 1 }, () => 0)).toBe('Gerardo')
+  expect(menosUsado({ ...todos(2), Gerardo: 1, Ronin: 1 }, () => 0.999)).toBe('Ronin')
+  expect(new Set(Array.from({ length: 25 }, (_, i) => menosUsado({}, () => i / 25)))).toEqual(new Set(TAGS))
+  expect(['M-06', 'M-07']).not.toContain(menosUsado({ 'M-06': 0, 'M-07': 0, ...todos(1) }))
+  // cuántas sesiones tienen cada uno: las de la app, también las archivadas, y esta, que la app no cuenta; la borrada y
+  // los personajes que ya no se reparten, no. Sin la app (en la terminal), las que aún tienen su transcripción
+  const a = (clave: string, tag: string, ids: string[] = []) => ({ clave, tag, desde: 0, ids })
+  const asig = [a('local_a', 'Terror'), a('local_b', 'Terror'), a('local_borrada', 'Ronin'), a('local_yo', 'Liz'), a('local_c', 'M-06')]
+  const app = new Map([['local_a', 'Doc'], ['local_b', 'Web-02'], ['local_c', 'Vieja']])
+  expect(repartoDe(asig, { app, yo: 'local_yo', ahora: 1 }).cuentas).toEqual({ Terror: 2, Liz: 1 })
+  const enDisco = new Set(['id-1', 'id-3'])
+  expect(repartoDe([a('id-1', 'Ronin', ['id-1']), a('id-2', 'Poli', ['id-2']), a('local_x', 'Gecko', ['id-0', 'id-3'])],
+    { app: null, enDisco, ahora: 1 }).cuentas).toEqual({ Ronin: 1, Gecko: 1 })
+  // a quién espera una bloqueada: por su id; las fichas de antes del 5-nov, por su personaje
+  const f = (id: string, tag: string) => ({ id, tag } as any)
+  expect([esperaA({ ruta: 'a', de: 'Liz', deId: 'x2' }, f('x1', 'Liz')), esperaA({ ruta: 'a', de: 'Liz', deId: 'x2' }, f('x2', 'Liz')),
+    esperaA({ ruta: 'a', de: 'Liz' }, f('x1', 'Liz')), esperaA(null, f('x1', 'Liz'))]).toEqual([false, true, true, false])
 
   // Cuándo lo usas, el lunes 26 a las 17:40, con lo de hoy y lo del domingo 25
   const AHORA = new Date(2026, 9, 26, 17, 40, 0).getTime()
@@ -1109,4 +1193,131 @@ test('Al instalar, por repo y rama: solo las de su rama y solo el freno de git',
   expect(JSON.stringify(escribe)).not.toContain('D-137')
   const deshace: any = await $.tool.call({ tool: 'Bash', command: 'git restore a.txt', description: 'Deshacer a.txt' } as any)
   expect(JSON.stringify(deshace)).toContain('sin commit de otra sesi')
+})
+
+// El personaje de cada sesión, guardado por su código (5-nov: una misma sesión cambiaba de personaje de un día para otro): al
+// reabrirla con otro id, también al día siguiente y aunque otra abierta tenga el mismo; la nueva que aún no sabe su código
+// (la app lo apunta un momento después de arrancarla); el proceso de reserva de la app, que no lo tiene hasta que se usa;
+// y fuera de la app, por su id, contando las sesiones que siguen en el disco
+test('El personaje de cada sesión: reabrirla otro día, la nueva, la reserva y la terminal', async ($, on) => {
+  const reloj = mock.clock(on, { now: AHORA })
+  mock.env(on, { USERPROFILE: 'C:\\Users\\prueba' })
+  const fs = new Map<string, { text: string; mtimeMs: number }>()
+  const pon = (ruta: string, valor: unknown) => fs.set(ruta, { text: JSON.stringify(valor), mtimeMs: reloj.now() })
+  on('fs.list', (_: any, e: any) => {
+    const dir = norma(e.path).toLowerCase()
+    const out: unknown[] = []
+    const dirs = new Set<string>()
+    for (const [k, v] of fs) {
+      if (!k.toLowerCase().startsWith(`${dir}/`)) continue
+      const resto = k.slice(dir.length + 1)
+      if (resto.includes('/')) dirs.add(resto.split('/')[0] as string)
+      else out.push({ name: resto, kind: 'file', size: v.text.length, mtimeMs: v.mtimeMs, isLink: false })
+    }
+    for (const d of dirs) out.push({ name: d, kind: 'dir', size: 0, mtimeMs: 0, isLink: false })
+    return { value: out }
+  })
+  on('fs.stat', (_: any, e: any) => {
+    const r = norma(e.path).toLowerCase()
+    const f = [...fs].find(([k]) => k.toLowerCase() === r)?.[1]
+    if (f) return { value: { kind: 'file', size: f.text.length, mtimeMs: f.mtimeMs, isLink: false } }
+    throw new Error(`ENOENT ${r}`)
+  })
+  on('fs.read', (_: any, e: any) => {
+    const f = fs.get(norma(e.path))
+    if (!f) throw new Error(`ENOENT ${norma(e.path)}`)
+    return { value: f.text }
+  })
+  on('fs.write', (_: any, e: any) => {
+    fs.set(norma(e.path), { text: e.text, mtimeMs: reloj.now() })
+    return { value: undefined }
+  })
+  let id = 'nuevo-1'
+  let cwd = 'D:\\Proyecto'
+  on('session.id', () => ({ value: id }))
+  on('session.root', () => ({ value: cwd }))
+  on('session.cwd', () => ({ value: cwd }) as any)
+  on('session.usage', () => ({ value: { startedAt: AHORA, context: {}, cost: { usd: 0 }, rateLimits: [] } }) as any)
+  on('agent.list', () => ({ value: [] }) as any)
+  on('process.run', () => ({ value: { exitCode: 128, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }) as any)
+  on('tool.register', () => ({ value: {} }) as any)
+  on('command.register', (_: any, e: any) => ({ value: { command: e.name } }) as any)
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('ui.invalidate', () => ({ value: undefined }) as any)
+  on('ui.toast', () => ({ value: undefined }) as any)
+  on('session.start', (_: any, e: any) => ({ cwd: e.cwd }))
+  // la lista de la app; sin ella (en la terminal), la llamada falla
+  let app: unknown[] | null = [{ sessionId: 'local_r', title: 'Reabierta' }, { sessionId: 'local_otra', title: 'Otra' }]
+  on('mcp.call', () => {
+    if (!app) throw new Error('sin la app')
+    return { value: { content: [{ type: 'text', text: JSON.stringify(app) }], isError: false } } as any
+  })
+  fs.set(`${CASA}/d-137/personajes/.migrado`, { text: 'hecho', mtimeMs: AHORA })
+  pon(`${CASA}/d-137/personajes/local_r.json`, { clave: 'local_r', tag: 'Gecko', desde: AHORA - 86400000, ids: ['viejo-0'] })
+  pon(`${CASA}/d-137/personajes/local_otra.json`, { clave: 'local_otra', tag: 'Ronin', desde: AHORA - 86400000, ids: ['otra-0'] })
+  const asignado = (clave: string) => JSON.parse(fs.get(`${CASA}/d-137/personajes/${clave}.json`)?.text ?? 'null')
+  const ficha = (i: string) => JSON.parse(fs.get(`${CASA}/d-137/${i}.json`)?.text ?? '{}')
+  const sesion = (sessionId: string, extra: Record<string, unknown> = {}) =>
+    pon(`${CASA}/sessions/200.json`, { sessionId, name: 'Reabierta', entrypoint: 'claude-desktop', ...extra })
+  const arranca = async () => {
+    await $.session.start({ cwd, surface: 'desktop', isInteractive: true })
+    await reloj.settle()
+  }
+
+  // la app la vuelve a abrir con otro id: el suyo de siempre, y su id nuevo apuntado
+  sesion('nuevo-1', { hostSessionId: 'local_r' })
+  await arranca()
+  expect(ficha('nuevo-1').tag).toBe('Gecko')
+  expect(asignado('local_r').ids).toEqual(['viejo-0', 'nuevo-1'])
+  // al día siguiente, con otro id y con Gecko en otra sesión abierta: el mismo (hasta el 5-nov, la ficha de ayer ya no
+  // contaba y cogía otro libre)
+  for (const k of [...fs.keys()].filter(k => k.endsWith('/nuevo-1.json'))) {
+    const x = fs.get(k) as { text: string }
+    fs.set(k, { text: JSON.stringify({ ...JSON.parse(x.text), latido: AHORA - 86400000 }), mtimeMs: AHORA - 86400000 })
+  }
+  pon(`${CASA}/d-137/viva.json`, { id: 'viva', tag: 'Gecko', nombre: 'Otra', rotulo: 'Otra', desde: AHORA - 5000, latido: AHORA,
+    estado: 'esperando', turno: 0, paso: '', toca: [], archivos: [], espera: null, v: 2, enlace: 'claude://claude.ai/epitaxy/local_otra' })
+  id = 'nuevo-2'
+  sesion('nuevo-2', { hostSessionId: 'local_r' })
+  await arranca()
+  expect(ficha('nuevo-2').tag).toBe('Gecko')
+  expect(asignado('local_r').ids).toEqual(['viejo-0', 'nuevo-1', 'nuevo-2'])
+
+  // una nueva cuyo código la app apunta un momento después: hasta entonces, sin personaje (no sale en los paneles); luego,
+  // uno de los que no tiene ninguna (ni Gecko ni Ronin)
+  id = 'nueva-3'
+  sesion('otro-proceso')
+  await arranca()
+  await reloj.advance(300)
+  expect(ficha('nueva-3').tag).toBe('')
+  sesion('nueva-3', { hostSessionId: 'local_nueva' })
+  await reloj.advance(1200)
+  expect(['Gecko', 'Ronin', '']).not.toContain(ficha('nueva-3').tag)
+  expect(asignado('local_nueva')).toMatchObject({ tag: ficha('nueva-3').tag, ids: ['nueva-3'] })
+
+  // un proceso de reserva de la app (spare): no tiene código hasta que se usa; ni personaje ni nada apuntado
+  id = 'spare-4'
+  cwd = 'C:\\Users\\prueba\\.claude\\spares\\spare-abc'
+  sesion('spare-4', { name: undefined })
+  await arranca()
+  await reloj.advance(25000)
+  expect(ficha('spare-4').tag).toBe('')
+  expect(asignado('spare-4')).toBe(null)
+
+  // en la terminal, sin la app: la clave es su id, al momento, y cuentan las sesiones que siguen en el disco (Poli); las de
+  // la app, sin ella, ya no (sus transcripciones no están)
+  id = 'cli-5'
+  cwd = 'D:\\Proyecto'
+  app = null
+  pon(`${CASA}/sessions/200.json`, { sessionId: 'cli-5', entrypoint: 'cli' })
+  const LIBRES = new Set(TAGS)
+  for (const t of TAGS.slice(1)) {
+    pon(`${CASA}/d-137/personajes/cli-${t}.json`, { clave: `cli-${t}`, tag: t, desde: 1, ids: [`cli-${t}`] })
+    fs.set(`${CASA}/projects/D--Proyecto/cli-${t}.jsonl`, { text: '', mtimeMs: AHORA })
+    LIBRES.delete(t)
+  }
+  await arranca()
+  // todos los tienen una, menos el primero, Marty: le toca ese
+  expect(asignado('cli-5')).toMatchObject({ clave: 'cli-5', ids: ['cli-5'], tag: [...LIBRES][0] })
+  expect(ficha('cli-5').tag).toBe('M-01')
 })

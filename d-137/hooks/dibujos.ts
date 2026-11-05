@@ -91,24 +91,27 @@ export const iconoFranja = (nombre: string) => {
 export const spriteDe = (tag?: string): Sprite =>
   MARTYS.find(m => m.tag === tag) ?? RESERVA.find(m => m.tag === tag) ?? (MARTYS[0] as Sprite)
 
-// Los píxeles juntados por tramos de una fila, para que el SVG pese poco
+// Los píxeles juntados por tramos de una fila, en un trazado por color (cada tramo, un rectángulo de un píxel de alto),
+// para que el SVG pese poco: con un <rect> por tramo, el selector de personaje (los 25 dibujos de ficha) pesaba
+// 540.000 caracteres y la app no lo pintaba (5-nov); así, unas cuatro veces menos, y se ve igual
 export function rects(filas: string[], pal: Record<string, string>, dx = 0, dy = 0): string {
-  let out = ''
+  const porColor = new Map<string, string>()
   filas.forEach((f, y) => {
     let x = 0
     while (x < f.length) {
       const ch = f[x] ?? '.'
-      if (ch === '.' || !pal[ch]) {
+      const color = pal[ch]
+      if (ch === '.' || !color) {
         x += 1
         continue
       }
       let w = 1
       while (x + w < f.length && f[x + w] === ch) w += 1
-      out += `<rect x="${x + dx}" y="${y + dy}" width="${w}" height="1" fill="${pal[ch]}"/>`
+      porColor.set(color, `${porColor.get(color) ?? ''}M${x + dx} ${y + dy}h${w}v1h-${w}z`)
       x += w
     }
   })
-  return out
+  return [...porColor].map(([color, d]) => `<path fill="${color}" d="${d}"/>`).join('')
 }
 const ancho = (filas: string[]) => Math.max(...filas.map(f => f.length))
 const memo = new Map<string, string>()
@@ -203,6 +206,11 @@ export function fichaDe(tag: string | undefined, est: keyof typeof DE_ESTADO): F
   const d = FICHAS[`${tag}:${DE_ESTADO[est]}`]
   if (d) return figura(d, `${tag}:${est}`, est)
   return { svg: martyVivo(tag, est), w: 19, h: 20, propia: true }
+}
+// El dibujo de ficha de un personaje, quieto y con la cara de siempre, para el selector (selector.tsx)
+export function retrato(tag: string | undefined): Figura {
+  const d = FICHAS[`${tag}:normal`]
+  return d ? figura(d, `${tag}:retrato`) : fichaDe(tag, 'parada')
 }
 // La marca del estado de una ficha, encima de su recuadro, en la esquina: «?» si espera una decisión, «!» si está
 // bloqueada y las zetas, subiendo, si está parada; nada si trabaja
