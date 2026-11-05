@@ -10,7 +10,8 @@ import { gastadoDesde, horasDe, porSesion, ventanaSemana } from './hooks/calculo
 import { dolares, letra, millones } from './hooks/comun'
 import { cabezaDe, marty, spriteDe } from './hooks/dibujos'
 import { esperaA, nombreTag, restoDe, rotuloDe, TAGS } from './hooks/fichas'
-import { menosUsado, repartoDe } from './hooks/reparto'
+import { CIERRE, PENDIENTES } from './hooks/doc'
+import { idsEnDiscoGuardados, menosUsado, repartoDe } from './hooks/reparto'
 import { esteMes, historicoDe, mesesDe, totalesDe } from './hooks/historico'
 import { informeHtml } from './hooks/informe'
 import { analiza, anterioresDe, rutasDe } from './hooks/sesion'
@@ -379,7 +380,7 @@ test('D-137: fichas, frenos, Activo, Decisión, Cuota, panel y franja', async ($
     preguntas: { cuando: [AHORA - 85 * MIN, AHORA - 85 * MIN, AHORA - 40 * MIN], contestadas: 2, rec: 1, otra: 1, panel: 0 } })
 
   // El panel, pestaña a pestaña, en el escritorio
-  const ui: any = await $.ui.mount({ plugin: 'd-137', surface: 'desktop', component: 'Pane', requestId: 'd-137', props: PANE } as any)
+  let ui: any = await $.ui.mount({ plugin: 'd-137', surface: 'desktop', component: 'Pane', requestId: 'd-137', props: PANE } as any)
   const vuelca = async (nombre: string) => console.log(`ARBOL:${nombre}:${JSON.stringify(await ui.drawn())}`)
   // lo dibujado (botones, pastillas, etiquetas) se lee por su texto alternativo
   const textos = async () => (await ui.findAll({})).map((x: any) => [x.text, x.props?.alt].filter(Boolean).join(' ')).join(' | ')
@@ -429,6 +430,21 @@ test('D-137: fichas, frenos, Activo, Decisión, Cuota, panel y franja', async ($
   await reloj.settle()
   await tiene(/Liz: 1 sesión/, /Mutante: 1 sesión/)
   await vuelca('marty-selector')
+  // las casillas, en una fila que se parte sola: a lo ancho del panel caben cinco; en uno estrecho (el motor da al menos
+  // 36 columnas aunque tenga menos), cuatro o tres, sin cortar ninguna (revisión del 5-nov: con filas fijas de cinco, la
+  // quinta se salía)
+  expect((await ui.findAll({ key: 'sel-rejilla' }))[0]?.props?.flexWrap).toBe('wrap')
+  const anchos = async (u: any) => (await u.findAll({})).filter((x: any) => /: \d+ sesi/.test(x.props?.alt ?? '')).map((x: any) => x.props.width)
+  const ancho = (await anchos(ui))[0]
+  expect((await anchos(ui)).length).toBe(25)
+  expect(5 * ancho + 4 * 7).toBeLessThanOrEqual(PANE.bodyColumns * 7.9 - 48)
+  await ui.unmount()
+  const estrecho: any = await $.ui.mount({ plugin: 'd-137', surface: 'desktop', component: 'Pane', requestId: 'd-137', props: { ...PANE, bodyColumns: 30 } } as any)
+  const angosto = (await anchos(estrecho))[0]
+  expect((await anchos(estrecho)).length).toBe(25)
+  expect(4 * angosto + 3 * 7).toBeLessThanOrEqual(30 * 7.9 - 48)
+  await estrecho.unmount()
+  ui = await $.ui.mount({ plugin: 'd-137', surface: 'desktop', component: 'Pane', requestId: 'd-137', props: PANE } as any)
   await ui.press({ key: 'sel-cerrar' })
   await reloj.settle()
   expect(await textos()).not.toMatch(/Personaje de esta sesión/)
@@ -528,6 +544,15 @@ test('D-137: fichas, frenos, Activo, Decisión, Cuota, panel y franja', async ($
   // esta, Mutante, el elegido en el selector
   const arbolDoc = JSON.stringify(await ui.drawn())
   for (const tag of ['Liz', 'M-03', 'M-05', 'M-04']) expect(arbolDoc).toContain(dentro(marty(tag)))
+  // delante de «N sesiones», los dos botones de Todas (5-nov): el de la izquierda escribe en la caja tu skill de cierre
+  // de la sesión, y el de la derecha, la de lo pendiente (atajos.ts), sin mandarlas
+  await ui.press({ key: 'doc-cierre' })
+  await reloj.settle()
+  expect(puestos.at(-1)).toBe(`insert: ${CIERRE}`)
+  await ui.press({ key: 'doc-pendientes' })
+  await reloj.settle()
+  expect(puestos.at(-1)).toBe(`insert: ${PENDIENTES}`)
+  expect(CIERRE).toBe('Usa la skill Cierre de sesión (lee ~/.claude/skills/cierre/SKILL.md): cierra la sesión.')
   // con su ficha desplegada, el bloque de todas las de este mes, del día 1 a hoy (3-nov): de momento, esta, que guarda
   // lo suyo y trae lo de la sesión de la que sigue
   await tiene(/Del 1 al 15 de nov\. · 1 sesión/, /Activa[ |]*1:55\u00a0h/, /4,30\u00a0M/, /2,00\u00a0\$/, /Archivos[ |]*6/)
@@ -1320,4 +1345,38 @@ test('El personaje de cada sesión: reabrirla otro día, la nueva, la reserva y 
   // todos los tienen una, menos el primero, Marty: le toca ese
   expect(asignado('cli-5')).toMatchObject({ clave: 'cli-5', ids: ['cli-5'], tag: [...LIBRES][0] })
   expect(ficha('cli-5').tag).toBe('M-01')
+})
+
+// Sin la app, las sesiones que siguen en el disco se listan una vez cada pocos minutos (revisión del 5-nov: con el selector
+// abierto se listaban cada 30 s); antes, si en el reparto aparece otra sesión, para que cuente
+test('Sin la app, lo que hay en el disco vale unos minutos', async () => {
+  let listados = 0
+  const disco = new Set(['cli-a', 'cli-b'])
+  const $f = { fs: { list: async (dir: string) => {
+    listados += 1
+    return dir.endsWith('/projects')
+      ? [{ name: 'D--Proyecto', kind: 'dir', size: 0, mtimeMs: 0, isLink: false }]
+      : [...disco].map(id => ({ name: `${id}.jsonl`, kind: 'file', size: 0, mtimeMs: 0, isLink: false }))
+  } } }
+  const a = (clave: string) => ({ clave, tag: 'M-01', desde: 1, ids: [clave] })
+  expect([...(await idsEnDiscoGuardados($f, CASA, [a('cli-b')], 'cli-a', 0))].sort()).toEqual(['cli-a', 'cli-b'])
+  const primera = listados
+  // al minuto, ya con esta sesión apuntada (la suya no hace volver a listar): lo de antes, sin listar
+  await idsEnDiscoGuardados($f, CASA, [a('cli-a'), a('cli-b')], 'cli-a', 60_000)
+  expect(listados).toBe(primera)
+  // otra sesión nueva en el reparto: se vuelve a listar, y cuenta
+  disco.add('cli-c')
+  expect((await idsEnDiscoGuardados($f, CASA, [a('cli-a'), a('cli-b'), a('cli-c')], 'cli-a', 90_000)).has('cli-c')).toBe(true)
+  expect(listados).toBeGreaterThan(primera)
+  // una borrada sigue contando hasta que pasan los cinco minutos
+  disco.delete('cli-b')
+  const segunda = listados
+  expect((await idsEnDiscoGuardados($f, CASA, [a('cli-a'), a('cli-b'), a('cli-c')], 'cli-a', 120_000)).has('cli-b')).toBe(true)
+  expect(listados).toBe(segunda)
+  // una sesión recién abierta apunta su personaje antes de tener transcripción: se sigue mirando hasta que la tiene
+  const d = { clave: 'cli-d', tag: 'M-02', desde: 125_000, ids: ['cli-d'] }
+  expect((await idsEnDiscoGuardados($f, CASA, [a('cli-a'), a('cli-b'), a('cli-c'), d], 'cli-a', 125_000)).has('cli-d')).toBe(false)
+  disco.add('cli-d')
+  expect((await idsEnDiscoGuardados($f, CASA, [a('cli-a'), a('cli-b'), a('cli-c'), d], 'cli-a', 155_000)).has('cli-d')).toBe(true)
+  expect((await idsEnDiscoGuardados($f, CASA, [a('cli-a'), a('cli-b'), a('cli-c')], 'cli-a', 90_000 + 5 * 60_000 + 1)).has('cli-b')).toBe(false)
 })

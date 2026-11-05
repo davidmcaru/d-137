@@ -38,7 +38,9 @@ entrada, y cada una se pliega con su botón, a la derecha.
   (`explorer.exe "<ruta>"`), con copiar la ruta, abrir la carpeta con el archivo marcado y abrirlo en su programa, salvo
   el código, que va a VS Code (un `.py` o un `.js` abiertos con su programa se ejecutarían). Plegado, lo de la última
   hora, como mucho tres; desplegado, hasta 50.
-- **Todas** (todas las sesiones): su ficha (trabajan, esperan y bloqueadas) y, desplegada, el bloque de 3 × 3 de Marty con lo de
+- **Todas** (todas las sesiones): su ficha (trabajan, esperan y bloqueadas), con dos botones pequeños delante de «N
+  sesiones», como los de Sesión: el ✓ escribe en la caja tu skill de cierre de la sesión y la lista, la de lo pendiente
+  (sus rutas, en `atajos.ts`), con la frase entera y sin mandarla; y, desplegada, el bloque de 3 × 3 de Marty con lo de
   todas las sesiones de este mes, del día 1 a hoy, también las cerradas y las borradas (del histórico; el de todos los
   meses, con `/historico`): sumado lo que se suma, y el rato más largo y el que más gastó, el de la que más, y con «≈» el
   coste si parte de él es estimado. Las sesiones, en
@@ -212,12 +214,13 @@ defecto.
     cuando ya los tienen todos, entre los que tienen uno, y así. Cuentan las sesiones que existen, también las
     archivadas, según la lista de la propia app (`ccd_session_mgmt`, `list_sessions`); al borrar una, su personaje
     queda libre. Fuera de la app (en la terminal), la clave es el id de la sesión, y cuentan las que aún tienen su
-    transcripción en el disco.
+    transcripción en el disco, listadas una vez cada cinco minutos, o antes si aparece otra sesión en el reparto.
   - **El código lo apunta la app** un momento después de arrancar la sesión, así que el mod lo espera; hasta entonces,
     la ficha va sin personaje. Un proceso de reserva de la app (`spare`, en `~/.claude/spares`, que se convierte en la
     sesión siguiente) no tiene código hasta que se usa: no apunta nada ni sale en los paneles.
   - **El selector** (`hooks/selector.tsx`), con el ojo de la ficha, a la derecha del enlace de la sesión, que lo abre y
-    lo cierra y va con el borde cian mientras está abierto: los 25 en una rejilla de 5 × 5, cada uno con su dibujo de
+    lo cierra y va con el borde cian mientras está abierto: los 25 en una rejilla de 5 × 5 (en un panel estrecho, la
+    fila se parte sola en cuatro o en tres), cada uno con su dibujo de
     ficha, quieto, su nombre y una bola con cuántas sesiones lo tienen; el de esta sesión, con el borde y el fondo cian
     de lo elegido. Mientras se elige, bajo la ficha solo está el selector, y se cierra al elegir o al irse de la pestaña.
     No impide elegir uno repetido, solo lo cuenta, y lo elegido se guarda como el de esta sesión. Cada dibujo va en un

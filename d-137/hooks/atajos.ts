@@ -4,7 +4,9 @@
 
 // Las skills: su botón escribe en la caja «Usa la skill <nombre> (lee <ruta>): », donde esté el cursor, sin mandarlo,
 // para que acabes tú la frase. La ruta es la de su documento: el SKILL.md de una skill de Claude Code o cualquier .md
-// con el proceso. Fotos, Música, Vídeos y Recortes van a la vista en la franja; Trabajo, Estudios y Gustos, en «Más»
+// con el proceso. Fotos, Música, Vídeos y Recortes van a la vista en la franja; Trabajo, Estudios y Gustos, en «Más».
+// Cierre y Pendientes, en los dos botones de delante de «N sesiones» en la ficha de Todas (5-nov), escriben además la
+// frase entera: «cierra la sesión.» y «¿qué queda pendiente?»
 export const SKILLS = {
   fotos: { nombre: 'Fotos', ruta: '~/.claude/skills/fotos/SKILL.md' },
   musica: { nombre: 'Música', ruta: '~/.claude/skills/musica/SKILL.md' },
@@ -13,6 +15,8 @@ export const SKILLS = {
   trabajo: { nombre: 'Trabajo', ruta: '~/.claude/skills/trabajo/SKILL.md' },
   estudios: { nombre: 'Estudios', ruta: '~/.claude/skills/estudios/SKILL.md' },
   gustos: { nombre: 'Gustos', ruta: '~/.claude/skills/gustos/SKILL.md' },
+  cierre: { nombre: 'Cierre de sesión', ruta: '~/.claude/skills/cierre/SKILL.md' },
+  pendientes: { nombre: 'Pendientes', ruta: '~/.claude/skills/pendientes/SKILL.md' },
 }
 
 // La cabeza de Doc, a la izquierda de la franja: abre esta página o este documento como con doble clic (un índice de tus

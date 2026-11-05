@@ -88,6 +88,25 @@ export function repartoDe(asignados: Asignado[], o: { app: Map<string, string> |
 export async function idsEnDisco($: any, casa: string): Promise<Set<string>> {
   return new Set((await sesionesEnDisco($, casa)).map(s => s.id))
 }
+// Lo mismo, guardado unos minutos (revisión del 5-nov: con el selector abierto, sin la app, se volvía a listar cada 30 s).
+// Se lista antes si en el reparto aparece otra sesión que no estaba la vez anterior, para que cuente; la de esta sesión,
+// que cuenta siempre, no
+const DISCO_VALE = 5 * 60_000
+let enDiscoGuardado: { ids: Set<string>; claves: Set<string>; cuando: number } | null = null
+export async function idsEnDiscoGuardados($: any, casa: string, asignados: Asignado[], yo: string | null, ahora: number):
+  Promise<Set<string>> {
+  const antes = enDiscoGuardado
+  // y antes también si una sesión de hace menos de cinco minutos aún no estaba (su transcripción llega con su primer
+  // mensaje, después de apuntar su personaje)
+  const falta = (a: Asignado) => !antes?.ids.has(a.clave) && !a.ids.some(i => antes?.ids.has(i))
+  if (antes && ahora - antes.cuando <= DISCO_VALE &&
+    asignados.every(a => a.clave === yo || (antes.claves.has(a.clave) && !(falta(a) && ahora - a.desde < DISCO_VALE)))) {
+    return antes.ids
+  }
+  const ids = await idsEnDisco($, casa)
+  enDiscoGuardado = { ids, claves: new Set(asignados.map(a => a.clave)), cuando: ahora }
+  return ids
+}
 
 // Uno al azar entre los menos usados (5-nov): primero entre los que no tiene ninguna sesión; cuando ya los tienen
 // todos, entre los que tienen uno, y así

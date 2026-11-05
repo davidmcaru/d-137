@@ -14,18 +14,24 @@ import { anchoTexto, boton, esc, FUENTE, incrusta, mezcla, svgPulsable, T } from
 
 const POR_FILA = 5
 const HUECO = 7
+// lo que no es de las casillas: el borde y el aire de la tarjeta (48 px) y un margen, para que la quinta no salte a la
+// fila de abajo si el panel mide algo menos de lo calculado
+const FUERA = 56
+// la casilla más estrecha: por debajo, las filas se parten solas en cuatro o en tres
+const MINIMA = 40
 const ALTO = 92
 const GRIS_CUENTA = '#bdbdb7'
 const texto = (t: string, x: number, y: number, tam: number, negrita: boolean, color: string) =>
   `<text x="${x}" y="${y}" text-anchor="middle" font-family="${FUENTE}" font-size="${tam}" font-weight="${negrita ? 700 : 500}" ` +
   `fill="${color}">${esc(t)}</text>`
 
-// Una casilla: el dibujo de ficha, lo más grande que quepa en 44 × 54; su nombre, con la letra algo más pequeña si no
-// cabe; y la bola con cuántas sesiones lo tienen (gris claro si alguna, apagada si ninguna), con un aro del fondo de la
-// casilla para que se lea aunque toque el dibujo (el de Mutante, el más ancho)
+// Una casilla: el dibujo de ficha, lo más grande que quepa en 44 × 54 (en una casilla estrecha, con 4 px a cada lado); su
+// nombre, con la letra algo más pequeña si no cabe; y la bola con cuántas sesiones lo tienen (gris claro si alguna,
+// apagada si ninguna), con un aro del fondo de la casilla para que se lea aunque toque el dibujo (el de Mutante, el más
+// ancho)
 function casilla(tag: string, n: number, actual: boolean, w: number): string {
   const f = retrato(tag)
-  const k = Math.min(44 / f.w, 54 / f.h)
+  const k = Math.min(Math.min(44, w - 8) / f.w, 54 / f.h)
   const fw = Math.round(f.w * k)
   const fh = Math.round(f.h * k)
   const fondo = actual ? mezcla(T.acento, 0.14, T.tarjeta) : T.marco
@@ -45,17 +51,15 @@ export function selectorPersonajes(el: El, d: Datos, a: Acciones): RenderElement
   const { Box, Text } = el
   const yo = d.yo?.tag ?? ''
   const cuentas = d.reparto?.cuentas ?? {}
-  // lo que cabe dentro de la tarjeta (unos 7,9 px por columna, menos su borde y su aire), en cinco columnas
-  const w = Math.floor((Math.max(240, Math.round(d.cols * 7.9 - 48)) - HUECO * (POR_FILA - 1)) / POR_FILA)
+  // cinco por fila en lo que cabe dentro de la tarjeta (unos 7,9 px por columna); en un panel más estrecho (el motor da
+  // al menos 36 columnas aunque tenga menos), la fila se parte sola en cuatro o en tres, y ninguno se queda cortado
+  // (revisión del 5-nov: con filas fijas de cinco, el quinto se salía)
+  const w = Math.max(MINIMA, Math.floor((d.cols * 7.9 - FUERA - HUECO * (POR_FILA - 1)) / POR_FILA))
   const casillas = TAGS.map(tag => {
     const n = cuentas[tag] ?? 0
     return svgPulsable(el, `sel-${tag}`, casilla(tag, n, tag === yo, w), w, ALTO,
       `${nombreTag(tag)}: ${n === 1 ? '1 sesión' : `${n} sesiones`}`, () => a.eligePersonaje(tag))
   })
-  const filas: RenderElement[] = []
-  for (let i = 0; i < casillas.length; i += POR_FILA) {
-    filas.push(<Box key={`sel-f${i}`} flexDirection="row" gap="xs">{casillas.slice(i, i + POR_FILA)}</Box>)
-  }
   return (
     <Box key="selector" flexDirection="column" borderStyle="round" borderColor={T.acento} backgroundColor={T.tarjeta}
       paddingX="sm" paddingY="sm" gap="sm">
@@ -64,7 +68,7 @@ export function selectorPersonajes(el: El, d: Datos, a: Acciones): RenderElement
       <Text key="sel-nota" size="caption" color={T.t3} wrap="wrap">
         {d.reparto ? 'El número: las sesiones que lo tienen, también las archivadas.' : 'Contando las sesiones…'}
       </Text>
-      <Box key="sel-rejilla" flexDirection="column" gap="xs">{filas}</Box>
+      <Box key="sel-rejilla" flexDirection="row" flexWrap="wrap" gap="xs">{casillas}</Box>
     </Box>
   )
 }

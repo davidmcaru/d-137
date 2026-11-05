@@ -14,6 +14,7 @@ import {
 import { fichaDe, marca, marcaFicha, pixelado, docDe } from './dibujos'
 import type { CaraDoc } from './dibujos'
 import { esperaA, nombreCompleto, nombreDe, nombreTag, restoDe } from './fichas'
+import { SKILLS } from './atajos'
 import { boton, chip, grueso, mezcla, numero, separador, T, unaVez } from './kit'
 
 const ORDEN: Est[] = ['trabaja', 'espera', 'bloqueada', 'parada']
@@ -36,6 +37,10 @@ export const mensajeBloqueo = (f: Ficha) =>
 
 // El recuadro del Marty en el panel de la elegida
 const CAJA_ELEGIDA = { w: 62, h: 72 }
+// Los dos botones de delante de «N sesiones» (5-nov), como el enlace y el ojo de la ficha de Sesión: escriben en la caja
+// tu skill de cierre de la sesión y la de lo pendiente (atajos.ts), con la frase entera, y no los mandan
+export const CIERRE = `Usa la skill ${SKILLS.cierre.nombre} (lee ${SKILLS.cierre.ruta}): cierra la sesión.`
+export const PENDIENTES = `Usa la skill ${SKILLS.pendientes.nombre} (lee ${SKILLS.pendientes.ruta}): ¿qué queda pendiente?`
 
 export function pestanaDoc(el: El, d: Datos, a: Acciones): RenderElement[] {
   const { Box, Text, Button, Select } = el
@@ -62,6 +67,13 @@ export function pestanaDoc(el: El, d: Datos, a: Acciones): RenderElement[] {
     dibujo: figuraEn(el, docDe(cara), 'Doc'),
     arriba: arriba(el, 'Doc', titular[0], titular[1]),
     derecha: plegar(el, 'fichaDoc', abiertoF, a),
+    // delante de «N sesiones»: a la izquierda, el cierre de la sesión, y a la derecha, lo pendiente
+    antesNombre: (
+      <Box key="ficha-antes" flexDirection="row" alignItems="center" gap="xs">
+        {boton(el, 'doc-cierre', { icono: 'check', alto: 18 }, () => a.escribe(CIERRE, d.surface))}
+        {boton(el, 'doc-pendientes', { icono: 'lista', alto: 18 }, () => a.escribe(PENDIENTES, d.surface))}
+      </Box>
+    ),
     nombre: plural(todas.length, 'sesión', 'sesiones'),
     cols: d.cols,
     abajo: abiertoF ? (

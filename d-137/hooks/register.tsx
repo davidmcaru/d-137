@@ -26,7 +26,7 @@ import { esteMes, historicoDe, mesesDe, totalesDe } from './historico'
 import { informeHtml, informeTexto } from './informe'
 import { pendientesDe, respuestaDe } from './pajaro'
 import {
-  guardaAsignado, idsEnDisco, leeAsignado, leeAsignados, menosUsado, migraReparto, repartoDe, sesionesDeLaApp,
+  guardaAsignado, idsEnDiscoGuardados, leeAsignado, leeAsignados, menosUsado, migraReparto, repartoDe, sesionesDeLaApp,
 } from './reparto'
 import { COMMIT, franja, MAS, panel } from './panel'
 import { analiza, anterioresDe, resumenDe, tocados } from './sesion'
@@ -287,10 +287,13 @@ function asigna($: any, id: string, intento = 0) {
   })().catch(() => undefined)
 }
 // Cuántas sesiones tienen cada personaje: las de la app, también las archivadas, o, sin ella, las que siguen en el disco
+// (guardadas unos minutos)
 async function alDiaReparto($: any, clave = claveSesion): Promise<Reparto> {
   const app = await sesionesDeLaApp($)
-  const enDisco = app ? undefined : await idsEnDisco($, await casa($))
-  const r = repartoDe(await leeAsignados($), { app, enDisco, yo: clave ?? undefined, ahora: await $.clock.now() })
+  const asignados = await leeAsignados($)
+  const ahora = await $.clock.now()
+  const enDisco = app ? undefined : await idsEnDiscoGuardados($, await casa($), asignados, clave, ahora)
+  const r = repartoDe(asignados, { app, enDisco, yo: clave ?? undefined, ahora })
   await update($, reparto, () => r)
   return r
 }

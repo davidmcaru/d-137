@@ -172,6 +172,8 @@ La franja viene con ejemplos, y todas sus rutas están en un archivo,
   Doc puede ser también un `.cmd`, el que arranque tu panel. Si el archivo no está, el panel te dice qué ruta falta.
 - **Cerrar-Tanda**, en «Commit», sigue la receta de `.claude/commands/cerrar-tanda.md` del repo antes del commit y el
   push.
+- **Cierre de sesión y Pendientes**, los dos botones de la ficha de Todas, escriben tu skill de cerrar una sesión y la de
+  repasar lo que queda, con la frase entera.
 
 Tras cambiarlo, pulsa «Mods» (en «Más») o escribe `/reload-plugins` en cada sesión.
 
