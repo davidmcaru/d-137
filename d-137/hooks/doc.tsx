@@ -8,7 +8,7 @@ import type { Ficha } from '../types'
 import type { Acciones, Datos, El, Est } from './comun'
 import {
   abiertoDe, bloqueTotales, cabecera, corto, desdeDe, pulsable, dibujo, ESTADOS, estadoDe, ficha, figuraEn, hora, ico,
-  delMes, marcaEn, mini, pct,
+  delMes, desdeEl, marcaEn, mini, pct,
   plegar, plural, porFilaDe, rejilla, SUAVE, tamFigura, tarjeta, tiempoCorto, tiempoEstado, toque,
 } from './comun'
 import { fichaDe, marca, marcaFicha, pixelado, docDe } from './dibujos'
@@ -61,7 +61,13 @@ export function pestanaDoc(el: El, d: Datos, a: Acciones): RenderElement[] {
   // hoy, también las cerradas y las borradas (historico.ts; lo de todos los meses, con /historico): sumado lo que se
   // suma; el rato más largo y el que más gastó, el de la que más; y los archivos, los que han tocado entre todas
   const abiertoF = abiertoDe(d, 'fichaDoc')
-  const his = d.historico
+  // El periodo, con tres botones a la derecha de su línea: la semana de la cuota, desde que se renovó (con
+  // su hora) hasta ahora; el mes, del día 1 a hoy, como estaba; o todo
+  const periodo = d.ui.periodo === 'semana' || d.ui.periodo === 'todo' ? d.ui.periodo : 'mes'
+  const his = periodo === 'semana' ? d.historicoSemana ?? null : periodo === 'todo' ? d.historicoTodo ?? null : d.historico
+  const rango = !his ? 'Sin datos todavía'
+    : periodo === 'semana' ? desdeEl(his.desde, true) : periodo === 'todo' ? desdeEl(his.desde) : delMes(d.ahora)
+  const periodos: [string, string][] = [['semana', 'Semanal'], ['mes', 'Mensual'], ['todo', 'Histórico']]
   const cabeza = ficha(el, {
     key: 'ficha',
     dibujo: figuraEn(el, docDe(cara), 'Doc'),
@@ -78,7 +84,13 @@ export function pestanaDoc(el: El, d: Datos, a: Acciones): RenderElement[] {
     cols: d.cols,
     abajo: abiertoF ? (
       <Box key="historico" flexDirection="column" gap="xs">
-        {his ? <Text size="caption" color={T.t3} wrap="truncate-end">{`${delMes(d.ahora)} · ${plural(his.n, 'sesión', 'sesiones')}`}</Text> : null}
+        <Box key="periodo" flexDirection="row" alignItems="center" gap="xs">
+          <Box flexGrow={1} minWidth={0}>
+            <Text size="caption" color={T.t3} wrap="truncate-end">{his ? `${rango} · ${plural(his.n, 'sesión', 'sesiones')}` : rango}</Text>
+          </Box>
+          {periodos.map(([k, texto]) =>
+            boton(el, `per-${k}`, { texto, tipo: periodo === k ? 'borde' : 'suave', alto: 20 }, () => a.ui('periodo', k)))}
+        </Box>
         {bloqueTotales(el, 'todas', his ?? {}, { etiqueta: 'Archivos', valor: his ? String(Math.round(his.archivos)) : '—', color: T.naranja })}
       </Box>
     ) : undefined,

@@ -149,6 +149,57 @@ export function esteMes(todas: Historico[], ahora: number, vivas: Set<string>): 
   return { ...cuenta, n: sesiones.length, desde }
 }
 
+// Lo de esta semana de la cuota, desde que se renovó hasta ahora: los días
+// enteros, del histórico; el de la renovación, solo desde su hora, en la parte de sus
+// dólares (o, si no, de sus tokens) que el registro apunta hora a hora (usdH y tokH, de los últimos nueve días) y, sin
+// horas, en la parte del día que queda. Lo más largo de ese día solo cuenta si la mayor parte fue después
+export function estaSemana(todas: Historico[], registros: Registro[], desde: number, ahora: number, vivas: Set<string>): TotalesHistorico {
+  const hs = cuentan(todas)
+  const conCoste = hs.filter(h => costeDe(h) > 0)
+  const precio = suma(conCoste.map(costeDe)) / (suma(conCoste.map(pesoDe)) || 1)
+  const dia0 = diaDe(desde)
+  const hora0 = new Date(desde).getHours()
+  const hoy = diaDe(ahora)
+  const regs = new Map(registros.map(r => [r.id.toLowerCase(), r]))
+  const porHoras = (l?: number[]) => {
+    const todo = suma(l ?? [])
+    return l && todo > 0 ? suma(l.slice(hora0)) / todo : null
+  }
+  const t: TotalesHistorico = {
+    n: 0, desde, abierta: 0, activa: 0, maxT: 0, usd: 0, maxUsd: 0, tok: 0, maxTok: 0, archivos: 0, estimado: false,
+  }
+  for (const h of hs) {
+    const coste = costeDe(h)
+    const estimado = coste <= 0
+    const porPeso = estimado ? precio : coste / (pesoDe(h) || 1)
+    let suyo = 0
+    for (const [dia, x] of Object.entries(h.dias)) {
+      if (dia < dia0 || dia > hoy) continue
+      const r = dia === dia0 ? regs.get(h.id.toLowerCase())?.dias[dia] : undefined
+      const parte = dia === dia0 ? porHoras(r?.usdH) ?? porHoras(r?.tokH) ?? Math.max(0, 24 - hora0) / 24 : 1
+      if (parte <= 0) continue
+      const usd = (estimado ? x.peso * precio : x.usd) * parte
+      t.usd += usd
+      t.tok += x.tok * parte
+      t.activa += x.activa * parte
+      t.archivos += x.archivos * parte
+      suyo += usd + x.tok * parte
+      if (parte >= 0.5) {
+        t.maxT = Math.max(t.maxT, x.maxT)
+        t.maxTok = Math.max(t.maxTok, x.maxTok)
+        t.maxUsd = Math.max(t.maxUsd, x.maxPeso * porPeso)
+      }
+      if (estimado && usd > 0) t.estimado = true
+    }
+    if (suyo > 0) {
+      t.n += 1
+      const hasta = vivas.has(h.id) ? ahora : h.fin
+      t.abierta += Math.max(0, Math.min(hasta, ahora) - Math.max(h.inicio, desde))
+    }
+  }
+  return t
+}
+
 // Todo sumado: lo que encabeza el informe
 export function totalesDe(todas: Historico[], ahora: number, vivas: Set<string>): TotalesHistorico | null {
   const meses = mesesDe(todas, ahora, vivas)

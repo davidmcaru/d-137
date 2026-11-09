@@ -15,14 +15,14 @@ import type {
 } from '../types'
 import { AJUSTES, leeAjustes } from './ajustes'
 import { ANALIZAR, ANALIZAR_PRO, PANEL } from './atajos'
-import { apunta, llevaLaCuota, mejorLectura, puntosPorDolar } from './calculos'
+import { apunta, llevaLaCuota, mejorLectura, puntosPorDolar, ventanaSemana } from './calculos'
 import type { Acciones, Datos } from './comun'
 import { decisionesDe, DESPLEGADOS, letra, sinToque, TOQUES, vistaPasos } from './comun'
 import {
   carpeta, casa, datosSesion, diaDe, enlaceDe, guarda, guardaGlobal, guardaHistorico, guardaRegistro, idsEscritorio, leeGlobal,
   leeHistoricos, leeRegistros, leeTodas, migra, nombreDe, nombreTag, norm, repoDe, rotuloDe, TAGS,
 } from './fichas'
-import { esteMes, historicoDe, mesesDe, totalesDe } from './historico'
+import { estaSemana, esteMes, historicoDe, mesesDe, totalesDe } from './historico'
 import { informeHtml, informeTexto } from './informe'
 import { pendientesDe, respuestaDe } from './pajaro'
 import {
@@ -74,6 +74,8 @@ const registros = atom({ plugin: 'd-137', key: 'registros' } as const, [] as Reg
 const global = atom({ plugin: 'd-137', key: 'global' } as const, { dias: {}, horas: {} } as CuotaGlobal)
 // Lo de todas las sesiones que ha habido, ya sumado, para la ficha de Doc
 const historico = atom({ plugin: 'd-137', key: 'historico' } as const, null as TotalesHistorico | null)
+const historicoSemana = atom({ plugin: 'd-137', key: 'historicoSemana' } as const, null as TotalesHistorico | null)
+const historicoTodo = atom({ plugin: 'd-137', key: 'historicoTodo' } as const, null as TotalesHistorico | null)
 // Cuántas sesiones tienen cada personaje (reparto.ts), para el selector
 const reparto = atom({ plugin: 'd-137', key: 'reparto' } as const, null as Reparto | null)
 // Lo de la vista: la pestaña, lo desplegado, lo pulsado y lo elegido en Decisión (por defecto, todo plegado)
@@ -93,6 +95,7 @@ const cuandoModo = atom({ plugin: 'd-137', key: 'cuandoModo' } as const, 'semana
 const diaModo = atom({ plugin: 'd-137', key: 'diaModo' } as const, 'sesion')
 // La unidad de «Por sesión» en Cuota: el %, por defecto, los millones de tokens o los dólares (28-oct)
 const unidad = atom({ plugin: 'd-137', key: 'unidad' } as const, 'pct')
+const periodo = atom({ plugin: 'd-137', key: 'periodo' } as const, 'mes')
 const confirma = atom({ plugin: 'd-137', key: 'confirma' } as const, '')
 // El menú abierto de la franja: Más, Commit o ninguno
 const franjaMenu = atom({ plugin: 'd-137', key: 'franjaMenu' } as const, null as string | null)
@@ -568,11 +571,17 @@ async function abiertas($: any): Promise<Ficha[]> {
   const yo = await read($, ficha)
   return [...(yo ? [yo] : []), ...(await read($, otras))]
 }
-// Lo de este mes, del día 1 a hoy, de todas las sesiones, para la ficha de Doc
+// Lo de todas las sesiones para la ficha de Doc: este mes, del día 1 a hoy; esta semana de la cuota, desde que se
+// renovó (con su hora); y todo
 async function alDiaHistorico($: any) {
   const vivas = new Set((await abiertas($)).map(f => f.id))
-  const t = esteMes(await leeHistoricos($), await $.clock.now(), vivas)
-  await update($, historico, () => t)
+  const ahora = await $.clock.now()
+  const hs = await leeHistoricos($)
+  const vent = ventanaSemana(await read($, cuota), await read($, global), ahora)
+  const regs = await leeRegistros($)
+  await update($, historico, () => esteMes(hs, ahora, vivas))
+  await update($, historicoSemana, () => estaSemana(hs, regs, vent.inicio, ahora, vivas))
+  await update($, historicoTodo, () => totalesDe(hs, ahora, vivas))
 }
 // Lo que falta en el histórico, de lo más nuevo a lo más viejo (lo que sigue de otra sesión, antes: así aquella ya no hace
 // falta leerla): las sesiones de antes de que existiera, las que no lo guardan porque llevan el mod de antes, las que se
@@ -1040,6 +1049,7 @@ function acciones($: any): Acciones {
       case 'cuandoModo': void update($, cuandoModo, () => String(v)); break
       case 'diaModo': void update($, diaModo, () => String(v)); break
       case 'unidad': void update($, unidad, () => String(v)); break
+      case 'periodo': void update($, periodo, () => String(v)); break
       case 'confirma': void update($, confirma, () => String(v)); break
       default: break
     }
@@ -1256,24 +1266,25 @@ function acciones($: any): Acciones {
 }
 
 async function datos($: any, cols: number, surface = 'desktop'): Promise<Datos> {
-  const [est, lista, loHecho, t0, t1, msg, yo, resto, cu, tareas, dado, g, regs, glo, pl, his, rep] = await Promise.all([
+  const [est, lista, loHecho, t0, t1, msg, yo, resto, cu, tareas, dado, g, regs, glo, pl, his, rep, hisS, hisT] = await Promise.all([
     read($, estado), read($, pasos), read($, hecho), read($, inicio), read($, fin), read($, aviso),
     read($, ficha), read($, otras), read($, cuota), read($, marcha), read($, entregas), read($, gasto), read($, registros),
-    read($, global), read($, plan), read($, historico), read($, reparto),
+    read($, global), read($, plan), read($, historico), read($, reparto), read($, historicoSemana), read($, historicoTodo),
   ])
-  const [pe, ab, rs, el, fi, ts, tp, ec, md, vi, mv, mt, cm, dm, un, cf] = await Promise.all([
+  const [pe, ab, rs, el, fi, ts, tp, ec, md, vi, mv, mt, cm, dm, un, cf, pr] = await Promise.all([
     read($, pestana), read($, abiertos), read($, repoSel), read($, elegida), read($, filtro), read($, tocaSel),
     read($, tocaPaso), read($, elecciones), read($, mandadas), read($, vistos), read($, marchaVista), read($, marchaTipo),
-    read($, cuandoModo), read($, diaModo), read($, unidad), read($, confirma),
+    read($, cuandoModo), read($, diaModo), read($, unidad), read($, confirma), read($, periodo),
   ])
   const ui: Datos['ui'] = {
     pestana: pe, abiertos: ab, repoSel: rs, elegida: el, filtro: fi, tocaSel: ts, tocaPaso: tp, elecciones: ec,
     mandadas: md, vistos: vi, marchaVista: mv, marchaTipo: mt, cuandoModo: cm, diaModo: dm, unidad: un, confirma: cf,
-    textos: TEXTOS,
+    periodo: pr, textos: TEXTOS,
   }
   return {
     ahora: await $.clock.now(), cols, surface, yo, otras: resto, est, pasos: lista, t0, t1, hecho: loHecho, entregas: dado,
-    gasto: g, marcha: tareas, cuota: cu, global: glo, registros: regs, historico: his, reparto: rep, plan: pl, aviso: msg, ui,
+    gasto: g, marcha: tareas, cuota: cu, global: glo, registros: regs, historico: his, historicoSemana: hisS,
+    historicoTodo: hisT, reparto: rep, plan: pl, aviso: msg, ui,
   }
 }
 

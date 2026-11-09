@@ -173,6 +173,9 @@ declare module 'claude-code' {
       registros: Registro[]
       global: CuotaGlobal
       historico: TotalesHistorico | null
+      // lo mismo, de esta semana de la cuota (desde que se renovó) y de todo
+      historicoSemana: TotalesHistorico | null
+      historicoTodo: TotalesHistorico | null
       reparto: Reparto | null
       pestana: Pestana
       abiertos: Record<string, boolean>
@@ -190,6 +193,8 @@ declare module 'claude-code' {
       diaModo: string
       // la unidad de «Por sesión» en Cuota: % (de la semana), tok (millones de tokens) o usd
       unidad: string
+      // el periodo de la ficha de Doc: semana (de la cuota), mes o todo
+      periodo: string
       confirma: string
       franjaMenu: string | null
     }

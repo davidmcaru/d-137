@@ -57,7 +57,8 @@ export function pestanaPortales(el: El, d: Datos, a: Acciones): RenderElement[] 
     nombre: haySemana ? `${pct0(semana)} de la semana` : 'La cuota llega con la primera respuesta de Claude',
     cols: d.cols,
     filas: [
-      { etiqueta: 'Semana', frac: semana / 100, valor: haySemana ? pct0(semana) : '—', color: CIAN },
+      // con un decimal, como «Hoy»; Claude Code lo da en enteros: «98,0 %»
+      { etiqueta: 'Semana', frac: semana / 100, valor: haySemana ? pct(semana) : '—', color: CIAN },
       { etiqueta: 'Hoy', frac: (usoHoy ?? 0) / (100 / 7), valor: pct(usoHoy), color: AMARILLO },
       { etiqueta: '5 h', frac: (cinco ?? 0) / 100, valor: typeof cinco === 'number' ? pct0(cinco) : '—', color: VERDE },
     ],

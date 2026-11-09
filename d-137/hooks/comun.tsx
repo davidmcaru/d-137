@@ -65,6 +65,13 @@ export const delMes = (ms: number) => {
   const mes = MESES[d.getMonth()] ?? ''
   return d.getDate() === 1 ? `1 de ${mes}` : `Del 1 al ${d.getDate()} de ${mes}`
 }
+// Desde cuándo cuenta la ficha de Doc: «Desde el 4 de nov., 10:00» (la semana de la cuota, con su hora) o «Desde el 23 de
+// oct.» (todo)
+export const desdeEl = (ms: number, conHora = false) => {
+  const d = new Date(ms)
+  const h = conHora ? `, ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : ''
+  return `Desde el ${d.getDate()} de ${MESES[d.getMonth()] ?? ''}${h}`
+}
 // El tiempo de la etiqueta de cada estado, como en las maquetas: «Trabaja · 12:40 min», «Espera · 6 min», «Parada · 2:53 h»
 export function tiempoEstado(est: Est, ms: number): string {
   if (ms >= 3600000) return hm(ms)
@@ -122,6 +129,8 @@ export type Ui = {
   diaModo: string
   unidad: string
   confirma: string
+  // el periodo de la ficha de Doc: 'semana', 'mes' o 'todo'
+  periodo?: string
 }
 export type Datos = {
   ahora: number
@@ -141,6 +150,9 @@ export type Datos = {
   global: CuotaGlobal
   registros: Registro[]
   historico: TotalesHistorico | null
+  // lo mismo, de esta semana de la cuota y de todo
+  historicoSemana?: TotalesHistorico | null
+  historicoTodo?: TotalesHistorico | null
   reparto: Reparto | null
   plan: string[]
   aviso: string
