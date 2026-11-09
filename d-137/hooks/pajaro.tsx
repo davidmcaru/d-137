@@ -8,8 +8,8 @@ import { nombreTag } from './fichas'
 import type { Decision, Ficha, Tarea } from '../types'
 import type { Acciones, Datos, El } from './comun'
 import {
-  abiertoDe, arriba, bloque3x3, cabecera, corto, decisionesDe, dibujo, duracion, ESTADOS, estadoDe, ficha, figuraEn, hace, hora, ico,
-  insignia, letra, mini, pct0, plegar, plural, respuesta, tarjeta, toque, VERDE,
+  abiertoDe, bloque3x3, cabecera, corto, decisionesDe, dibujo, duracion, ESTADOS, estadoDe, ficha, figuraEn, hace, hora, ico,
+  insigniaCabe, letra, mini, pct0, plural, respuesta, tarjeta, toque, VERDE,
 } from './comun'
 import { insignia as bola, fijaDe, icono as iconoD, marca, marty, tenue } from './dibujos'
 import {
@@ -121,13 +121,10 @@ export function pestanaPajaro(el: El, d: Datos, a: Acciones): RenderElement[] {
   const cabeza = ficha(el, {
     key: 'ficha',
     dibujo: figuraEn(el, fijaDe('pajaro'), 'Paloma mensajera'),
-    arriba: arriba(el, 'Paloma mensajera', nDec ? 'te toca' : 'al día', nDec ? ESTADOS.espera.texto : 'success'),
-    derecha: (
-      <Box key="paj-der" flexDirection="row" alignItems="center" gap="xs">
-        {insignia(el, 'avisos', 'campana', plural(avisos.length, 'aviso', 'avisos'))}
-        {plegar(el, 'fichaPajaro', abiertoF, a)}
-      </Box>
-    ),
+    titulo: { quien: 'Paloma mensajera', estado: nDec ? 'te toca' : 'al día', color: nDec ? ESTADOS.espera.texto : 'success' },
+    // los avisos; en un panel estrecho, solo su número (9-nov)
+    derecha: max => insigniaCabe(el, 'avisos', 'campana', plural(avisos.length, 'aviso', 'avisos'), max, { corto: String(avisos.length) }),
+    plegable: { clave: 'fichaPajaro', abierto: abiertoF, a },
     abajo: abiertoF ? bloque : undefined,
     nombre: `${plural(nDec, 'decisión', 'decisiones')} · ${plural(pendientes.length, 'sesión', 'sesiones')}`,
     cols: d.cols,

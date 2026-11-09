@@ -9,8 +9,8 @@ import {
 } from './calculos'
 import type { Acciones, Datos, El } from './comun'
 import {
-  AMARILLO, arriba, cabecera, CIAN, corto, dibujo, dibujoLleno, dolares, ficha, figuraEn, hora, ico, millones, mini, pct, pct0,
-  plegar, plural, tarjeta, VERDE,
+  AMARILLO, cabecera, CIAN, corto, dibujo, dibujoLleno, dolares, ficha, figuraEn, hora, ico, millones, mini, pct, pct0,
+  plural, tarjeta, VERDE,
 } from './comun'
 import { fijaDe } from './dibujos'
 import { diaDe } from './fichas'
@@ -51,9 +51,9 @@ export function pestanaPortales(el: El, d: Datos, a: Acciones): RenderElement[] 
   const cabeza = ficha(el, {
     key: 'ficha',
     dibujo: figuraEn(el, fijaDe('pistola'), 'La pistola de portales'),
-    arriba: arriba(el, 'Cuota y día', va === null ? (haySemana ? pct0(semana) : 'sin datos') : va >= 0 ? `sobra ${pct(va)}` : `falta ${pct(-va)}`,
-      va === null ? 'inactive' : va >= 0 ? 'success' : 'error'),
-    derecha: plegar(el, 'ficha', abiertoF, a),
+    titulo: { quien: 'Cuota y día', estado: va === null ? (haySemana ? pct0(semana) : 'sin datos') : va >= 0 ? `sobra ${pct(va)}` : `falta ${pct(-va)}`,
+      color: va === null ? 'inactive' : va >= 0 ? 'success' : 'error' },
+    plegable: { clave: 'ficha', abierto: abiertoF, a },
     nombre: haySemana ? `${pct0(semana)} de la semana` : 'La cuota llega con la primera respuesta de Claude',
     cols: d.cols,
     filas: [

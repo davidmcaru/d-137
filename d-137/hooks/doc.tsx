@@ -7,9 +7,9 @@ import type { RenderElement } from 'claude-code'
 import type { Ficha } from '../types'
 import type { Acciones, Datos, El, Est } from './comun'
 import {
-  abiertoDe, arriba, bloqueTotales, cabecera, corto, desdeDe, pulsable, dibujo, ESTADOS, estadoDe, ficha, figuraEn, hora, ico,
+  abiertoDe, bloqueTotales, cabecera, corto, desdeDe, pulsable, dibujo, ESTADOS, estadoDe, ficha, figuraEn, hora, ico,
   delMes, marcaEn, mini, pct,
-  plegar, plural, rejilla, SUAVE, tamFigura, tarjeta, tiempoCorto, tiempoEstado, toque,
+  plegar, plural, porFilaDe, rejilla, SUAVE, tamFigura, tarjeta, tiempoCorto, tiempoEstado, toque,
 } from './comun'
 import { fichaDe, marca, marcaFicha, pixelado, docDe } from './dibujos'
 import type { CaraDoc } from './dibujos'
@@ -65,8 +65,8 @@ export function pestanaDoc(el: El, d: Datos, a: Acciones): RenderElement[] {
   const cabeza = ficha(el, {
     key: 'ficha',
     dibujo: figuraEn(el, docDe(cara), 'Doc'),
-    arriba: arriba(el, 'Doc', titular[0], titular[1]),
-    derecha: plegar(el, 'fichaDoc', abiertoF, a),
+    titulo: { quien: 'Doc', estado: titular[0], color: titular[1] },
+    plegable: { clave: 'fichaDoc', abierto: abiertoF, a },
     // delante de «N sesiones»: a la izquierda, el cierre de la sesión, y a la derecha, lo pendiente
     antesNombre: (
       <Box key="ficha-antes" flexDirection="row" alignItems="center" gap="xs">
@@ -162,7 +162,7 @@ export function pestanaDoc(el: El, d: Datos, a: Acciones): RenderElement[] {
       plegable: { clave: 'sesiones', abierto: abiertoS, a },
     }),
     vistas.length
-      ? rejilla(el, 'ses-rejilla', vistas.map(casilla), abiertoS ? 2 : 4)
+      ? rejilla(el, 'ses-rejilla', vistas.map(casilla), porFilaDe(d.cols, abiertoS))
       : <Text key="ses-nada" size="footnote" color="inactive">Ninguna en ese estado.</Text>,
   ])
 
@@ -227,7 +227,8 @@ export function pestanaDoc(el: El, d: Datos, a: Acciones): RenderElement[] {
             {ico(el, pasa.icono, c.hex, 13)}
             <Box flexGrow={1} minWidth={0}><Text size="footnote" color={T.t2} wrap="truncate-end">{pasa.texto}</Text></Box>
           </Box>
-          <Box flexDirection="row" gap="xs">
+          {/* en un panel estrecho, los botones bajan a otra línea en vez de salirse (9-nov) */}
+          <Box flexDirection="row" gap="xs" flexWrap="wrap">
             {principal}
             {!conSesion ? null : boton(el, 'el-sesion', { texto: 'Sesión', icono: 'ojo' }, () => a.abreSesion(f))}
             {boton(el, 'el-copiar', { texto: 'Copiar', icono: 'copiar' },
@@ -249,13 +250,17 @@ export function pestanaDoc(el: El, d: Datos, a: Acciones): RenderElement[] {
       grueso(el, clave, rojo.hex, mezcla(rojo.hex, 0.1, T.tarjeta), {}, { paddingX: 'sm', paddingY: 'xs' }, [
         <Box key="in" flexDirection="column" gap="xs" flexGrow={1} minWidth={0}>
         <Box flexDirection="row" alignItems="center" gap="xs">
-          {chip(el, `${clave}-chip`, 'Bloqueo', T.tinta, { punto: false, fondo: rojo.hex })}
-          {mini(el, f.tag, 16)}
-          <Text size="footnote" weight="bold">{nombreTag(f.tag)}</Text>
-          <Text size="footnote" color="inactive">espera</Text>
-          {mini(el, f.espera?.de, 16)}
-          <Text size="footnote" weight="bold">{nombreTag(f.espera?.de)}</Text>
-          <Box flexGrow={1} minWidth={0}><Text size="caption" color="inactive" wrap="truncate-end">{` · ${nombreDe(f.espera?.ruta ?? '')}`}</Text></Box>
+          {/* quién espera a quién, en lo que quepa (en un panel estrecho, en dos líneas), y el tiempo y el botón, siempre a
+              la derecha (9-nov: se salían) */}
+          <Box flexDirection="row" alignItems="center" gap="xs" flexWrap="wrap" flexGrow={1} flexShrink={1} minWidth={0}>
+            {chip(el, `${clave}-chip`, 'Bloqueo', T.tinta, { punto: false, fondo: rojo.hex })}
+            {mini(el, f.tag, 16)}
+            <Text size="footnote" weight="bold">{nombreTag(f.tag)}</Text>
+            <Text size="footnote" color="inactive">espera</Text>
+            {mini(el, f.espera?.de, 16)}
+            <Text size="footnote" weight="bold">{nombreTag(f.espera?.de)}</Text>
+            <Box flexGrow={1} minWidth={0}><Text size="caption" color="inactive" wrap="truncate-end">{` · ${nombreDe(f.espera?.ruta ?? '')}`}</Text></Box>
+          </Box>
           <Text size="footnote" weight="bold" color={rojo.texto} tabular>{tiempoEstado('bloqueada', d.ahora - desdeDe(f))}</Text>
           {plegar(el, clave, abierto, a)}
         </Box>
@@ -264,7 +269,7 @@ export function pestanaDoc(el: El, d: Datos, a: Acciones): RenderElement[] {
             <Text size="footnote" wrap="wrap">
               {`${nombreTag(f.tag)} (${f.rotulo}) quiere escribir en ${nombreDe(f.espera?.ruta ?? '')}, que ${nombreTag(f.espera?.de)}${dueno ? ` (${dueno.rotulo})` : ''} está tocando en su turno. El freno lo para hasta que lo suelte.`}
             </Text>
-            <Box flexDirection="row" gap="xs">
+            <Box flexDirection="row" gap="xs" flexWrap="wrap">
               {dueno ? boton(el, `${clave}-avisar`, { texto: `Avisar a ${nombreTag(dueno.tag)}`, icono: 'enviar', tipo: 'pri' }, () => a.avisa(dueno, mensajeBloqueo(f))) : null}
               {boton(el, `${clave}-sesion`, { texto: 'Sesión', icono: 'ojo' }, () => a.abreSesion(f))}
             </Box>

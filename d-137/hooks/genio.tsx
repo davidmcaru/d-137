@@ -6,9 +6,9 @@ import type { RenderElement } from 'claude-code'
 import type { Ficha, Tarea } from '../types'
 import type { Acciones, Datos, El } from './comun'
 import {
-  abiertoDe, arriba, bloque3x3, confirmar, corto, dolares, duracion, ESTADOS, ficha, figuraEn, hace, millones, mini, mmss, plegar, tiempoO,
+  abiertoDe, bloque3x3, confirmar, corto, dolares, duracion, ESTADOS, ficha, figuraEn, hace, millones, mini, mmss, tiempoO,
 } from './comun'
-import { boton, chip, etiqueta, filtro, mezcla, separador, T } from './kit'
+import { anchoEtiqueta, boton, chip, etiqueta, filtro, mezcla, separador, T } from './kit'
 import { fijaDe } from './dibujos'
 
 export type Tipo = 'servidor' | 'comando' | 'agente'
@@ -98,14 +98,22 @@ export function pestanaGenio(el: El, d: Datos, a: Acciones): RenderElement[] {
   const cabeza = ficha(el, {
     key: 'ficha',
     dibujo: figuraEn(el, fijaDe('genio'), 'Trabajador'),
-    arriba: arriba(el, 'Trabajador', titular[0], titular[1]),
-    derecha: (
-      <Box key="cuentas" flexDirection="row" alignItems="center" gap="xs">
-        {bien ? etiqueta(el, 'ok', String(bien), T.ok, { icono: 'check' }) : null}
-        {mal ? etiqueta(el, 'mal', String(mal), T.error, { icono: 'x' }) : null}
-        {plegar(el, 'fichaGenio', abiertoF, a)}
-      </Box>
-    ),
+    titulo: { quien: 'Trabajador', estado: titular[0], color: titular[1] },
+    // las cuentas de lo acabado; si no caben las dos, la de los fallos, que importa más (9-nov: se salían)
+    derecha: bien || mal ? max => {
+      const ok = bien ? { el: etiqueta(el, 'ok', String(bien), T.ok, { icono: 'check' }), ancho: anchoEtiqueta(String(bien), { icono: 'check' }) } : null
+      const ko = mal ? { el: etiqueta(el, 'mal', String(mal), T.error, { icono: 'x' }), ancho: anchoEtiqueta(String(mal), { icono: 'x' }) } : null
+      const van = [ok, ko].filter((x): x is { el: RenderElement; ancho: number } => !!x)
+      const ancho = van.reduce((s, x) => s + x.ancho, 0) + 7 * (van.length - 1)
+      const una = ko && ko.ancho <= max ? ko : ok && ok.ancho <= max ? ok : null
+      const pon = ancho <= max ? van : una ? [una] : []
+      if (!pon.length) return null
+      return {
+        el: <Box key="cuentas" flexDirection="row" alignItems="center" gap="xs">{pon.map(x => x.el)}</Box>,
+        ancho: pon.reduce((s, x) => s + x.ancho, 0) + 7 * (pon.length - 1),
+      }
+    } : undefined,
+    plegable: { clave: 'fichaGenio', abierto: abiertoF, a },
     nombre: activas.length ? `${activas.length} en marcha` : 'Nada en segundo plano',
     cols: d.cols,
     abajo: abiertoF ? bloque : undefined,
@@ -179,7 +187,8 @@ export function pestanaGenio(el: El, d: Datos, a: Acciones): RenderElement[] {
                   <Box flexGrow={1} minWidth={0}><Text size="footnote" weight="bold" color={T.t1} wrap="truncate-end">{t.que}</Text></Box>
                   <Box flexShrink={0}><Text size="caption" color={T.t3} tabular wrap="truncate-end">{t.fin ? hace(d.ahora - t.fin) : mmss(d.ahora - t.desde)}</Text></Box>
                 </Box>
-                <Box flexDirection="row" alignItems="center" gap="xs">
+                {/* en un panel estrecho, el estado y los botones bajan a otra línea en vez de salirse (9-nov) */}
+                <Box flexDirection="row" alignItems="center" gap="xs" flexWrap="wrap">
                   <Box flexGrow={1} minWidth={0}><Text size="caption" mono color={T.t3} wrap="truncate-end">{t.linea ?? ' '}</Text></Box>
                   {estado}
                   {botones}

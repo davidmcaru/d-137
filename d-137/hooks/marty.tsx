@@ -7,9 +7,9 @@ import type { RenderElement } from 'claude-code'
 import type { Ficha } from '../types'
 import type { Acciones, Datos, El } from './comun'
 import {
-  abiertoDe, AMARILLO, arriba, bloqueTotales, cabecera, corto, dibujo, duracion, ESTADOS, estadoDe, ficha, figuraEn, hace, hora, ico,
-  insignia, marcaEn, mini, desdeDe, mmss, tiempoCorto,
-  nombreArchivo, pct, pct0, plegar, pulsable, rejilla, tamFigura, tarjeta, toque, VERDE, vistaPasos,
+  abiertoDe, AMARILLO, bloqueTotales, cabecera, corto, dibujo, duracion, ESTADOS, estadoDe, ficha, figuraEn, hace, hora, ico,
+  insigniaCabe, marcaEn, mini, desdeDe, mmss, tiempoCorto,
+  nombreArchivo, pct, pct0, porFilaDe, pulsable, rejilla, tamFigura, tarjeta, toque, VERDE, vistaPasos,
 } from './comun'
 import type { PasoVista } from './comun'
 import { TIPOS, tareasDe } from './genio'
@@ -143,14 +143,11 @@ export function pestanaMarty(el: El, d: Datos, a: Acciones, cambiados: string[])
       : est === 'parada' ? undefined : { fondo: mezcla(c.hex, 0.2, T.marco), borde: c.hex },
     // arriba, solo hasta el primer espacio del nombre de la sesión, y el resto debajo (28-oct); con la dimensión por repo
     // o por rama, solo el personaje, y el nombre entero debajo (29-oct)
-    arriba: arriba(el, porNombre() ? `${nombreTag(yo.tag)} · ${yo.rotulo}` : nombreTag(yo.tag), c.nombre, c.texto),
-    // la carpeta, un botón que la abre en el Explorador (28-oct)
-    derecha: (
-      <Box key="ficha-der" flexDirection="row" alignItems="center" gap="xs">
-        {yo.repo ? insignia(el, 'carpeta', 'carpeta', yo.repo.carpeta, 'text', () => a.abreRuta(yo.repo?.raiz ?? '', true)) : null}
-        {plegar(el, 'fichaMarty', abiertoF, a)}
-      </Box>
-    ),
+    titulo: { quien: porNombre() ? `${nombreTag(yo.tag)} · ${yo.rotulo}` : nombreTag(yo.tag), estado: c.nombre, color: c.texto },
+    // la carpeta, un botón que la abre en el Explorador (28-oct); en un panel estrecho, acortada o solo el icono (9-nov)
+    derecha: yo.repo ? max => insigniaCabe(el, 'carpeta', 'carpeta', yo.repo?.carpeta ?? '', max,
+      { alPulsar: () => a.abreRuta(yo.repo?.raiz ?? '', true) }) : undefined,
+    plegable: { clave: 'fichaMarty', abierto: abiertoF, a },
     // delante del nombre, el que copia el enlace de la sesión, el mismo botón en pequeño (arriba, junto a la carpeta,
     // echaba fuera el de plegar; 28-oct), y a su derecha el ojo, que abre y cierra el selector de su personaje
     // (selector.tsx; 5-nov: más intuitivo que pulsar el dibujo), con el borde cian mientras está abierto
@@ -262,7 +259,7 @@ export function pestanaMarty(el: El, d: Datos, a: Acciones, cambiados: string[])
   let repo: RenderElement[] = []
   if (mismos.length || genio.length) {
     const abiertoR = d.ui.abiertos.repo === true
-    const porFila = abiertoR ? 2 : 4
+    const porFila = porFilaDe(d.cols, abiertoR)
     const casillas = mismos.map(f => {
       const r = relacion(yo, f, cambiados)
       const sel = d.ui.repoSel === f.id

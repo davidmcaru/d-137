@@ -283,6 +283,11 @@ export function leyenda(el: El, key: string, items: [string, string][]): RenderE
 
 // Una etiqueta de borde fino de su color, con su icono (las de Activo: el tipo, «SERVIDOR», y las cuentas «✓ 4» y
 // «✕ 1» de su ficha); en mayúsculas, la del tipo
+// lo que mide una etiqueta (para repartir el sitio de una fila; 9-nov)
+export const anchoEtiqueta = (texto: string, o: { icono?: string; mayus?: boolean } = {}) => {
+  const t = o.mayus ? texto.toUpperCase() : texto
+  return Math.round(7 + (o.icono ? 12 : 0) + (o.icono ? 5 : 0) + anchoTexto(t, o.mayus ? 11 : 12, true) * (o.mayus ? 1.06 : 1) + 8)
+}
 export function etiqueta(el: El, key: string, texto: string, color: string, o: { icono?: string; mayus?: boolean; alto?: number } = {}): RenderElement {
   const { Box, Text, Svg } = el
   const t = o.mayus ? texto.toUpperCase() : texto
@@ -290,7 +295,7 @@ export function etiqueta(el: El, key: string, texto: string, color: string, o: {
   const al = o.alto ?? 22
   const tam = o.mayus ? 11 : 12
   const iw = o.icono ? 12 : 0
-  const w = Math.round(7 + iw + (o.icono ? 5 : 0) + anchoTexto(t, tam, true) * (o.mayus ? 1.06 : 1) + 8)
+  const w = anchoEtiqueta(texto, o)
   const s = `<rect x="0.5" y="0.5" width="${w - 1}" height="${al - 1}" rx="6" fill="${color}1f" stroke="${color}66"/>` +
     (o.icono ? icono(o.icono, 7, (al - 12) / 2, 12, color, 2.4) : '') +
     `<text x="${7 + iw + (o.icono ? 5 : 0)}" y="${(al / 2 + tam * 0.36).toFixed(1)}" font-family="${FUENTE}" font-size="${tam}" ` +

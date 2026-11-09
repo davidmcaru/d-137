@@ -233,13 +233,17 @@ export function cabecera(el: El, o: {
   plegable?: { clave: string; abierto: boolean; a: Acciones }
 }): RenderElement {
   const { Box, Text } = el
+  // el título, en su caja que encoge: si el panel es estrecho, se corta con «…» y no echa fuera lo de la derecha
+  // (9-nov: en un panel estrecho se salían cosas)
   return (
     <Box key={o.key} flexDirection="row" alignItems="center" gap="xs">
       {o.icono ? ico(el, o.icono) : null}
-      <Text size="footnote" color={o.fuerte ? T.t1 : T.t3} weight={o.fuerte ? 'bold' : 'semibold'} wrap="truncate-end">
-        {o.titulo}
-        {o.cuenta !== undefined && o.cuenta !== '' ? <Text weight="bold" color={T.t1}>{` · ${o.cuenta}`}</Text> : null}
-      </Text>
+      <Box flexShrink={1} minWidth={0}>
+        <Text size="footnote" color={o.fuerte ? T.t1 : T.t3} weight={o.fuerte ? 'bold' : 'semibold'} wrap="truncate-end">
+          {o.titulo}
+          {o.cuenta !== undefined && o.cuenta !== '' ? <Text weight="bold" color={T.t1}>{` · ${o.cuenta}`}</Text> : null}
+        </Text>
+      </Box>
       <Box flexGrow={1} />
       {o.derecha ?? null}
       {o.plegable ? plegar(el, o.plegable.clave, o.plegable.abierto, o.plegable.a) : null}
@@ -250,12 +254,31 @@ export function cabecera(el: El, o: {
 // La ficha de arriba, igual de alta y ancha en las cinco pestañas: el dibujo en su marco, la línea de arriba grande y
 // en negrita, el nombre debajo (con lo que se diga delante, `antesNombre`: el botón pequeño del enlace en Sesión) y tres
 // filas de cuadritos con su cifra. Desplegada (la de Marty), debajo de una raya y a todo lo ancho, lo que se diga (`abajo`)
+//
+// La línea de arriba (9-nov: en un panel estrecho, o con un nombre largo, la carpeta echaba fuera el botón de
+// plegar): el botón, siempre a la derecha y entero; el título («quién · lo suyo»), hasta el 60 % de la fila; lo de la
+// derecha (`derecha`: la carpeta de Sesión, los avisos de Decisión, las cuentas de Activo), en lo que quede, que se acorta
+// solo; y el título, en lo que eso no use, cortado con «…» si no cabe
 export type FilaFicha = { etiqueta: string; frac: number; valor: string; color: string }
+export type Titulo = { quien: string; estado: string; color: string }
+// lo de la derecha de la línea de arriba, para el sitio que tiene (en px): lo que se pinta y lo que mide, o nada
+export type Derecha = (max: number) => { el: unknown; ancho: number } | null
+// el ancho de la columna de la ficha, a la derecha del dibujo: el panel (unos 7,9 px por columna) menos el borde y el aire
+// de la tarjeta (48), el marco del dibujo (unos 100) y su hueco (16), con un margen; medido en unas capturas del 9-nov
+export const anchoColumnaFicha = (cols: number) => Math.max(80, Math.round(cols * 7.9 - 165))
+const PLEGAR = 26
+const HUECO = 7
 export function ficha(el: El, o: {
-  key: string; dibujo: unknown; arriba: unknown; derecha?: unknown; nombre: string; filas: FilaFicha[]; cols: number;
+  key: string; dibujo: unknown; titulo: Titulo; derecha?: Derecha; plegable?: { clave: string; abierto: boolean; a: Acciones };
+  nombre: string; filas: FilaFicha[]; cols: number;
   debajo?: unknown; marca?: unknown; marco?: { fondo: string; borde: string }; abajo?: unknown; antesNombre?: unknown
 }): RenderElement {
   const { Box, Text } = el
+  const col = anchoColumnaFicha(o.cols)
+  const fijo = o.plegable ? PLEGAR + HUECO : 0
+  const entero = anchoTitulo(`${o.titulo.quien}${SEP}${o.titulo.estado}`)
+  const der = o.derecha ? o.derecha(Math.max(0, col - fijo - HUECO - Math.min(entero, Math.round(col * 0.6)))) : null
+  const maxTitulo = Math.max(0, col - fijo - (der ? der.ancho + HUECO : 0))
   // los cuadritos que caben entre la etiqueta y la cifra (unos 7,9 px por columna en el escritorio), todos los que
   // quepan, con el hueco de uno o dos antes de la cifra: con 14 como mucho, en un panel ancho quedaba un hueco grande
   // (28-oct; medido en sus capturas: la cuenta de antes se quedaba unos 40 px corta)
@@ -287,9 +310,12 @@ export function ficha(el: El, o: {
           {o.marca ?? null}
         </Box>
         <Box flexDirection="column" flexGrow={1} gap="xs" minWidth={0}>
+          {/* si la cuenta se queda corta en el panel de verdad, lo de la derecha encoge antes que el título (y se corta
+              en su caja) y el botón no se mueve */}
           <Box flexDirection="row" alignItems="center" gap="xs">
-            <Box flexGrow={1} minWidth={0}>{o.arriba}</Box>
-            {o.derecha ?? null}
+            <Box flexGrow={1} flexShrink={1} minWidth={0} overflow="hidden">{arriba(el, o.titulo, maxTitulo)}</Box>
+            {der ? <Box flexDirection="row" alignItems="center" flexShrink={100} minWidth={0} overflow="hidden">{der.el}</Box> : null}
+            {o.plegable ? plegar(el, o.plegable.clave, o.plegable.abierto, o.plegable.a) : null}
           </Box>
           {o.antesNombre ? (
             <Box flexDirection="row" alignItems="center" gap="xs" minWidth={0}>
@@ -359,40 +385,82 @@ export function bloqueTotales(el: El, key: string, t: Totales, archivos: CeldaFi
       archivos],
   ])
 }
-// La línea de arriba de una ficha: «quién · lo suyo», con lo suyo en el color de su estado
-export function arriba(el: El, quien: string, estado: string, color: string): RenderElement {
-  const { Text } = el
+// Lo que cabe de un texto en `max` px, con «…» al final si no cabe entero (vacío si no caben ni unas letras)
+export function cabe(texto: string, max: number, medir: (s: string) => number): string {
+  if (medir(texto) <= max) return texto
+  const letras = [...texto]
+  while (letras.length && medir(`${letras.join('').trimEnd()}…`) > max) letras.pop()
+  return letras.length ? `${letras.join('').trimEnd()}…` : ''
+}
+// Lo que mide el título de una ficha: anchoTexto se pasa con la letra grande (en unas capturas del 9-nov, un título de
+// 31 letras medía 213 px y la cuenta daba 274), así que va rebajado, con un poco de margen
+export const anchoTitulo = (s: string) => Math.ceil(anchoTexto(s, 16, true) * 0.8)
+const SEP = `${NB}·${NB}`
+// La línea de arriba de una ficha: «quién · lo suyo», con lo suyo en el color de su estado. En `max` px: si no cabe, se
+// corta el quién con «…» y lo suyo queda entero; si ni así, solo lo suyo (lo que más dice: «Espera», «sobra 24 %»; el
+// quién ya está en el dibujo y en la pestaña), cortado si hace falta. Cada parte va en su texto y su caja (un texto
+// dentro de otro, en el escritorio, se partía en dos líneas en vez de cortarse; 9-nov)
+export function arriba(el: El, t: Titulo, max = Infinity): RenderElement {
+  const { Box, Text } = el
+  let quien = t.quien
+  let estado = t.estado
+  if (anchoTitulo(`${quien}${SEP}${estado}`) > max) {
+    const sitio = max - anchoTitulo(`${SEP}${estado}`)
+    if (sitio >= anchoTitulo('Abcd…')) quien = cabe(quien, sitio, anchoTitulo)
+    else if (estado) {
+      quien = ''
+      estado = cabe(estado, max, anchoTitulo) || estado
+    } else quien = cabe(quien, max, anchoTitulo) || quien
+  }
   return (
-    <Text size="heading" weight="bold" wrap="truncate-end">
-      {quien}
-      <Text color={T.t3}>{' · '}</Text>
-      <Text color={color}>{estado}</Text>
-    </Text>
+    <Box flexDirection="row" alignItems="center" minWidth={0}>
+      {quien ? <Box flexShrink={1} minWidth={0}><Text size="heading" weight="bold" wrap="truncate-end">{quien}</Text></Box> : null}
+      {quien && estado ? <Box flexShrink={0}><Text size="heading" weight="bold" color={T.t3}>{SEP}</Text></Box> : null}
+      {estado ? <Box flexShrink={quien ? 0 : 1} minWidth={0}><Text size="heading" weight="bold" color={t.color} wrap="truncate-end">{estado}</Text></Box> : null}
+    </Box>
   )
 }
 // Una insignia con su icono (la carpeta de Marty, los avisos de Decisión): redonda y con su borde fino, como en las
 // maquetas (26-oct: «bordes redondeados»); en SVG, que una caja con fondo sale con las esquinas en pico. Con
-// `alPulsar`, un botón (la carpeta de Marty la abre en el Explorador; 28-oct)
-export function insignia(el: El, key: string, icon: string, texto: string, color = 'text', alPulsar?: () => void): RenderElement {
+// `alPulsar`, un botón (la carpeta de Marty la abre en el Explorador; 28-oct). Sin texto, solo el icono; `alt`,
+// lo que dice entero cuando el texto va acortado
+const anchoInsignia = (texto: string) => (texto ? Math.round(9 + 13 + 5 + anchoTexto(texto, 12, true) + 10) : 9 + 13 + 9)
+export function insignia(el: El, key: string, icon: string, texto: string, color = 'text', alPulsar?: () => void, alt = texto): RenderElement {
   const { Box, Button, Text, Svg } = el
   if (!Svg) {
-    return alPulsar ? <Button key={key} label={texto} variant="secondary" onPress={alPulsar} />
-      : <Text key={key} size="caption" weight="semibold">{texto}</Text>
+    return alPulsar ? <Button key={key} label={texto || alt} variant="secondary" onPress={alPulsar} />
+      : <Text key={key} size="caption" weight="semibold">{texto || alt}</Text>
   }
   const tam = 12
-  const w = Math.round(9 + 13 + 5 + anchoTexto(texto, tam, true) + 10)
+  const w = anchoInsignia(texto)
   const al = 22
   const s = `<rect x="0.5" y="0.5" width="${w - 1}" height="${al - 1}" rx="${al / 2}" fill="#ffffff08" stroke="${T.borde}"/>` +
     icono(icon, '#a8a69f').replace('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">', `<svg x="9" y="4.5" width="13" height="13" viewBox="0 0 24 24">`) +
-    `<text x="${9 + 13 + 5}" y="${(al / 2 + tam * 0.36).toFixed(1)}" font-family="Inter, 'Segoe UI', system-ui, sans-serif" ` +
-    `font-size="${tam}" font-weight="600" fill="${hexDe(color)}">${esc(texto)}</text>`
+    (texto ? `<text x="${9 + 13 + 5}" y="${(al / 2 + tam * 0.36).toFixed(1)}" font-family="Inter, 'Segoe UI', system-ui, sans-serif" ` +
+      `font-size="${tam}" font-weight="600" fill="${hexDe(color)}">${esc(texto)}</text>` : '')
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${al}" viewBox="0 0 ${w} ${al}">${s}</svg>`
-  if (alPulsar) return svgPulsable(el, key, svg, w, al, texto, alPulsar)
+  if (alPulsar) return svgPulsable(el, key, svg, w, al, alt, alPulsar)
   return (
     <Box key={key} flexShrink={0}>
-      <Svg source={svg} alt={texto} width={w} height={al} />
+      <Svg source={svg} alt={alt} width={w} height={al} />
     </Box>
   )
+}
+// Una insignia para la línea de arriba de una ficha, en `max` px: entera; si no cabe, con su texto cortado con «…» (si
+// se leen al menos unas letras); si no, con lo corto que se diga (el número de avisos) o solo el icono; y si ni eso, nada
+export function insigniaCabe(el: El, key: string, icon: string, texto: string, max: number,
+  o: { corto?: string; color?: string; alPulsar?: () => void } = {}): { el: RenderElement; ancho: number } | null {
+  const pon = (t: string) => ({ el: insignia(el, key, icon, t, o.color, o.alPulsar, texto), ancho: anchoInsignia(t) })
+  if (anchoInsignia(texto) <= max) return pon(texto)
+  // lo que no es texto: el aire, el icono y su hueco (37 px)
+  const sitio = max - 37
+  if (sitio >= 70) {
+    const t = cabe(texto, sitio, s => anchoTexto(s, 12, true))
+    if (t) return pon(t)
+  }
+  const corto = o.corto ?? ''
+  if (anchoInsignia(corto) <= max) return pon(corto)
+  return anchoInsignia('') <= max ? pon('') : null
 }
 // Una pastilla de color con su texto (un estado, un número, «Bloqueo»…): el fondo, en la caja; dentro de un texto, el
 // escritorio no lo pinta
@@ -421,6 +489,9 @@ export function pulsable(el: El, key: string, figura: unknown, anchoPx: number, 
 // La zona propia que recibe el clic de una casilla entera vive en kit.tsx, con el resto del aspecto de las maquetas
 export { sinToque, toque, TOQUES } from './kit'
 
+// Cuántas casillas van por fila: cerradas, cuatro; abiertas, dos si el panel da para ellas (cada una pide unos 145 px,
+// con su dibujo y sus dos botones) y, si no, una (9-nov: en un panel estrecho, las de la derecha se salían)
+export const porFilaDe = (cols: number, abiertas: boolean) => (!abiertas ? 4 : cols * 7.9 - 48 >= 2 * 145 + 7 ? 2 : 1)
 // Las casillas en filas de n, todas del mismo ancho (la última fila, con huecos)
 export function rejilla(el: El, key: string, items: RenderElement[], porFila: number): RenderElement {
   const { Box } = el
