@@ -253,12 +253,17 @@ async function alDiaRepo($: any) {
 }
 // El personaje de esta sesión (reparto.ts): el que tiene guardado por su código o, si es nueva, uno de los menos usados.
 // La app apunta el código de la sesión un momento después de arrancarla (se vio el 5-nov: 1,3 s después), y un proceso de
-// reserva de la app (spare, en ~/.claude/spares) no lo tiene hasta que se usa, y entonces arranca otra vez con otro id:
-// mientras, la ficha va sin personaje y no sale en los paneles. Fuera de la app, la clave es su id
+// reserva de la app (spare, en ~/.claude/spares) no lo tiene hasta que se usa: mientras, la ficha va sin personaje y no
+// sale en los paneles. Al usarlo, la app lo arranca otra vez con otro id o le deja el suyo y le apunta el código sin
+// avisar (se vio el 10-nov: a una sesión le llegó 35 s después de arrancar, cuando ya nadie lo esperaba, y se quedó sin
+// personaje y sin poder elegirlo): pasada la espera del arranque, el latido sigue mirando hasta que llega (tarde).
+// Fuera de la app, la clave es su id
 let claveSesion: string | null = null
 const ESPERA_CLAVE = 500
 const INTENTOS_CLAVE = 40
-function asigna($: any, id: string, intento = 0) {
+// Lo que dura la espera del arranque, con margen: hasta entonces el latido no mira, para no cruzarse con ella
+const SIN_CLAVE_TRAS = ESPERA_CLAVE * INTENTOS_CLAVE + 5000
+function asigna($: any, id: string, intento = 0, tarde = false) {
   void (async () => {
     if ((await $.session.id()) !== id) return
     // la primera vez, las sesiones que ya existen se quedan con el que tenían
@@ -269,7 +274,9 @@ function asigna($: any, id: string, intento = 0) {
       $.clock.after(ESPERA_CLAVE, () => asigna($, id, intento + 1))
       return
     }
-    if (!s.hostSessionId && /\/\.claude\/spares\//.test(`${norm(String(await $.session.cwd()))}/`)) return
+    // una de reserva sin usar; y, cuando mira el latido, mientras la app no le haya apuntado su código (cambia antes de
+    // carpeta: con su id por clave, el personaje se perdería al abrirla la app con otro id)
+    if (!s.hostSessionId && ((tarde && enApp) || /\/\.claude\/spares\//.test(`${norm(String(await $.session.cwd()))}/`))) return
     const clave = s.hostSessionId ?? id
     claveSesion = clave
     let a: Asignado | null = await leeAsignado($, clave)
@@ -1348,6 +1355,8 @@ export const register: Register = (on, opciones) => {
         const ya = await $.clock.now()
         await cambiaFicha($, x => ({ ...x, latido: ya }))
         latidos += 1
+        // el código que llega tarde (una sesión de reserva que la app pone a trabajar): se mira una vez por latido
+        if (!claveSesion && ya - ahora > SIN_CLAVE_TRAS) asigna($, id, INTENTOS_CLAVE, true)
         if (latidos % 2 === 0) await alDiaMarcha($)
         await refresca($)
         if (latidos % 10 === 0) {

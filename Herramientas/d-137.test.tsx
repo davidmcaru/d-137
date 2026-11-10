@@ -1328,6 +1328,20 @@ test('El personaje de cada sesión: reabrirla otro día, la nueva, la reserva y 
   await reloj.advance(25000)
   expect(ficha('spare-4').tag).toBe('')
   expect(asignado('spare-4')).toBe(null)
+  // la app lo pone a trabajar sin arrancarlo otra vez, con la espera del arranque ya acabada (se vio el 10-nov, 35 s
+  // después): primero cambia de carpeta y aún sin código sigue sin personaje (con su id por clave lo perdería al
+  // abrirla la app con otro id); cuando le apunta el código, el latido lo ve y le da uno de los que no tiene ninguna
+  cwd = 'D:\\Proyecto'
+  await reloj.advance(6000)
+  await reloj.settle()
+  expect(ficha('spare-4').tag).toBe('')
+  expect(asignado('spare-4')).toBe(null)
+  sesion('spare-4', { name: 'Adoptada', hostSessionId: 'local_adoptada' })
+  await reloj.advance(3000)
+  await reloj.settle()
+  expect(['Gecko', 'Ronin', '']).not.toContain(ficha('spare-4').tag)
+  expect(asignado('local_adoptada')).toMatchObject({ tag: ficha('spare-4').tag, ids: ['spare-4'], nombre: 'Adoptada' })
+  expect(asignado('spare-4')).toBe(null)
 
   // en la terminal, sin la app: la clave es su id, al momento, y cuentan las sesiones que siguen en el disco (Poli); las de
   // la app, sin ella, ya no (sus transcripciones no están)

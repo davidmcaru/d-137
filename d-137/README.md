@@ -217,7 +217,9 @@ defecto.
     transcripción en el disco, listadas una vez cada cinco minutos, o antes si aparece otra sesión en el reparto.
   - **El código lo apunta la app** un momento después de arrancar la sesión, así que el mod lo espera; hasta entonces,
     la ficha va sin personaje. Un proceso de reserva de la app (`spare`, en `~/.claude/spares`, que se convierte en la
-    sesión siguiente) no tiene código hasta que se usa: no apunta nada ni sale en los paneles.
+    sesión siguiente) no tiene código hasta que se usa: no apunta nada ni sale en los paneles. Al usarlo, la app puede
+    dejarle su id y apuntarle el código mucho después, con esa espera ya acabada: el latido sigue mirando y se lo da
+    en cuanto llega.
   - **El selector** (`hooks/selector.tsx`), con el ojo de la ficha, a la derecha del enlace de la sesión, que lo abre y
     lo cierra y va con el borde cian mientras está abierto: los 25 en una rejilla de 5 × 5 (en un panel estrecho, la
     fila se parte sola en cuatro o en tres), cada uno con su dibujo de
